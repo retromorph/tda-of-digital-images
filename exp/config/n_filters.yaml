@@ -1,0 +1,7 @@
+experiment: N_filters
+datasets: [MNIST, EMNIST]
+seeds: [0, 1, 2, 3, 4]
+batch_size: 64
+lr: 0.001
+epochs: 100
+filters: [[0], [0, 4], [0, 4, 7, 13]]
