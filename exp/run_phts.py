@@ -17,7 +17,7 @@ if str(ROOT) not in sys.path:
 from src.data import collate_fn, get_pht_dataset
 from src.logger import MLFlowLogger
 from src.models.deepsets import DeepSets
-from src.trainer import TrainerPHTX
+from src.trainer import TrainerPersformer
 from src.utils import get_mlflow_tracking_uri
 from torch.utils.data import DataLoader
 
@@ -92,7 +92,7 @@ print(
 print("Optimization:\t lr={}, batch size={}, seed={}, device={}".format(args.lr, args.batch_size, args.seed, args.device))
 
 logger = MLFlowLogger(mlflow_url, mlflow_project, vars(args))
-trainer = TrainerPHTX(model, device, logger)
+trainer = TrainerPersformer(model, device, logger)
 trainer.fit(
     dataloader_train,
     dataloader_val,

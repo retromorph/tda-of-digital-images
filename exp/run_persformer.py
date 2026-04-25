@@ -16,14 +16,14 @@ if str(ROOT) not in sys.path:
 
 from src.data import collate_fn, get_pht_dataset
 from src.logger import MLFlowLogger
-from src.models.phtx import PersistentHomologyTransformer
-from src.trainer import TrainerPHTX
+from src.models.persformer import Persformer
+from src.trainer import TrainerPersformer
 from src.utils import get_mlflow_tracking_uri
 from torch.utils.data import DataLoader
 
 parser = argparse.ArgumentParser(
-    description="Persistent Homology Transformer (PHTX)",
-    usage="uv run python exp/run_phtx.py --dataset MNIST --idx 0 4",
+    description="Persformer on persistence diagrams",
+    usage="uv run python exp/run_persformer.py --dataset MNIST --idx 0 4",
 )
 
 group = parser.add_argument_group("Algorithm configuration")
@@ -33,14 +33,26 @@ group.add_argument("--eps", type=float, help="Persistence epsilon threshold", de
 group.add_argument("--transform", help="Test-time transform name", default=None)
 group.add_argument("--power", type=float, help="Test-time transform strength", default=0.0)
 
-group.add_argument("--model", help="Model", default="PHTX")
+group.add_argument("--model", help="Model", default="PERSFORMER")
 group.add_argument("--d_model", type=int, help="Model dim", default=128)
-group.add_argument("--d_hidden", type=int, help="FFN hidden dim", default=192)
+group.add_argument("--d_hidden", type=int, help="FFN hidden dim (encoder)", default=512)
 group.add_argument("--num_heads", type=int, help="Attention heads", default=8)
-group.add_argument("--num_layers", type=int, help="Transformer encoder layers", default=2)
-group.add_argument("--dropout", type=float, help="Dropout", default=0.1)
+group.add_argument("--num_layers", type=int, help="Transformer encoder layers", default=5)
+group.add_argument("--encoder_dropout", type=float, help="Dropout in encoder + pooling attention", default=0.0)
+group.add_argument("--decoder_dropout", type=float, help="Dropout in MLP decoder", default=0.2)
+group.add_argument(
+    "--decoder_hidden_dims",
+    type=str,
+    help="Comma-separated hidden widths for MLP decoder (e.g. 256,256,64)",
+    default="256,256,64",
+)
+group.add_argument(
+    "--pooling_heads",
+    type=int,
+    default=None,
+    help="MHA pooling heads (default: same as --num_heads)",
+)
 group.add_argument("--norm", help="Post-encoder norm: layer, batch, or none", default="layer")
-group.add_argument("--agg", help="Diagram pooling: mean or max", default="max")
 group.add_argument("--activation", help="Transformer activation (GELU, ReLU, ...)", default="GELU")
 group.add_argument("--alpha", type=float, help="Activation alpha", default=0.0)
 group.add_argument(
@@ -50,9 +62,17 @@ group.add_argument(
     help="Transformer norm_first (--norm_first / --no-norm_first)",
 )
 
-group.add_argument("--lr", type=float, help="Learning rate", default=0.0001)
-group.add_argument("--batch_size", type=int, help="Batch size", default=128)
-group.add_argument("--epochs", type=int, help="Number of epochs", default=20)
+group.add_argument("--lr", type=float, help="Peak learning rate (after warmup)", default=1e-3)
+group.add_argument("--weight_decay", type=float, help="AdamW weight decay", default=1e-4)
+group.add_argument("--warmup_epochs", type=int, help="Linear LR warmup length", default=10)
+group.add_argument(
+    "--eta_min",
+    type=float,
+    help="Minimum LR after cosine decay (absolute; internally passed as eta_min/lr to trainer)",
+    default=1e-6,
+)
+group.add_argument("--batch_size", type=int, help="Batch size", default=32)
+group.add_argument("--epochs", type=int, help="Number of epochs", default=1000)
 
 group.add_argument("--seed", type=int, help="Seed", default=0)
 group.add_argument("--device", type=int, help="CUDA device id", default=0)
@@ -71,7 +91,7 @@ torch.manual_seed(args.seed)
 torch.cuda.manual_seed_all(args.seed)
 
 mlflow_url = get_mlflow_tracking_uri()
-mlflow_project = "PHTX_{}".format(args.experiment)
+mlflow_project = "PERSFORMER_{}".format(args.experiment)
 
 device = torch.device("cuda:{}".format(args.device)) if torch.cuda.is_available() else torch.device("cpu")
 
@@ -85,20 +105,28 @@ dataloader_val = DataLoader(dataset_val, args.batch_size, collate_fn=collate_fn,
 dataloader_test = DataLoader(dataset_test, args.batch_size, collate_fn=collate_fn, num_workers=args.num_workers)
 
 norm_kw = None if str(args.norm).lower() in ("none", "null", "") else args.norm
-model = PersistentHomologyTransformer(
-    None,
-    9,
-    meta.n_classes,
-    args.d_model,
-    args.d_hidden,
-    args.num_heads,
-    args.num_layers,
-    args.agg,
-    norm_kw,
-    args.dropout,
-    args.activation,
-    args.alpha,
-    args.norm_first,
+decoder_dims = tuple(int(x.strip()) for x in args.decoder_hidden_dims.split(",") if x.strip())
+
+# trainer expects eta_min as a ratio (LR_min / LR_peak) for scheduler setup
+# argparse eta_min is absolute min LR; convert to ratio here
+eta_min_ratio = args.eta_min / args.lr if args.lr > 0 else 0.0
+
+model = Persformer(
+    transform=None,
+    d_in=9,
+    d_out=meta.n_classes,
+    d_model=args.d_model,
+    d_hidden=args.d_hidden,
+    num_heads=args.num_heads,
+    num_layers=args.num_layers,
+    norm=norm_kw,
+    encoder_dropout=args.encoder_dropout,
+    decoder_hidden_dims=decoder_dims,
+    decoder_dropout=args.decoder_dropout,
+    activation=args.activation,
+    alpha=args.alpha,
+    norm_first=args.norm_first,
+    pooling_heads=args.pooling_heads,
 )
 
 print(
@@ -107,23 +135,36 @@ print(
     )
 )
 print(
-    "Model:\t\t {}, d_model={}, d_hidden={}, num_heads={}, num_layers={}, dropout={}, agg={}, norm={}, act={}, pre_ln={}".format(
+    "Model:\t\t {}, d_model={}, d_hidden={}, num_heads={}, num_layers={}, enc_do={}, dec_do={}, dec_h={}, norm={}, act={}, pre_ln={}, pool_h={}".format(
         args.model,
         args.d_model,
         args.d_hidden,
         args.num_heads,
         args.num_layers,
-        args.dropout,
-        args.agg,
+        args.encoder_dropout,
+        args.decoder_dropout,
+        decoder_dims,
         args.norm,
         args.activation,
         int(args.norm_first),
+        args.pooling_heads if args.pooling_heads is not None else args.num_heads,
     )
 )
-print("Optimization:\t lr={}, batch size={}, seed={}, device={}".format(args.lr, args.batch_size, args.seed, args.device))
+print(
+    "Optimization:\t lr={}, wd={}, warmup={}, eta_min={}, batch={}, epochs={}, seed={}, device={}".format(
+        args.lr,
+        args.weight_decay,
+        args.warmup_epochs,
+        args.eta_min,
+        args.batch_size,
+        args.epochs,
+        args.seed,
+        device,
+    )
+)
 
 logger = MLFlowLogger(mlflow_url, mlflow_project, vars(args))
-trainer = TrainerPHTX(model, device, logger)
+trainer = TrainerPersformer(model, device, logger)
 trainer.fit(
     dataloader_train,
     dataloader_val,
@@ -131,4 +172,7 @@ trainer.fit(
     lr=args.lr,
     n_epochs=args.epochs,
     desc="{}, {}".format(args.model, args.seed),
+    weight_decay=args.weight_decay,
+    warmup_epochs=args.warmup_epochs,
+    eta_min=eta_min_ratio,
 )

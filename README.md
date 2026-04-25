@@ -20,10 +20,28 @@ uv run jupyter notebook
 Запуск экспериментов (из корня репозитория):
 
 ```sh
-uv run python exp/run_phtx.py --dataset MNIST --help
+uv run python exp/run_persformer.py --dataset MNIST --help
+uv run python exp/run_latent_persformer.py --dataset MNIST --help
+uv run python exp/run_linear_persformer.py --dataset MNIST --help
 uv run python exp/exp_main.py
 uv run python exp/exp_invariance.py   # augmentation sweep (see exp/config/invariance.yaml)
+uv run python exp/run_persistence_image.py --dataset MNIST --epochs 1
+uv run python exp/run_persistence_landscape.py --dataset MNIST --epochs 1
+uv run python exp/run_persistence_silhouette.py --dataset MNIST --epochs 1
+uv run python exp/exp_fixed_encoders.py
 ```
+
+### Classical fixed encoders
+
+Добавлены фиксированные векторизации диаграмм в `src/fixed_encoders/`:
+- `PersistenceImage` (2D сетка), классификатор: небольшой `2D CNN`
+- `PersistenceLandscape` (k слоёв), классификатор: небольшой `1D CNN`
+- `PersistenceSilhouette` (1 кривая), классификатор: небольшой `1D CNN`
+
+Режимы взвешивания для `PersistenceImage` и `PersistenceSilhouette`:
+- `none` — вес `1`
+- `linear` — вес `persistence`
+- `power` — вес `persistence ** weight_power`
 
 ### MLflow
 
@@ -31,7 +49,7 @@ uv run python exp/exp_invariance.py   # augmentation sweep (see exp/config/invar
 
 ```sh
 export MLFLOW_TRACKING_URI=http://localhost:5000
-uv run python exp/run_phtx.py --dataset MNIST --epochs 1
+uv run python exp/run_persformer.py --dataset MNIST --epochs 1
 ```
 
 Сводка по эксперименту (имя эксперимента можно задать через `MLFLOW_EXPERIMENT_NAME`):

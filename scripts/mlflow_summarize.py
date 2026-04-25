@@ -7,7 +7,7 @@ from mlflow.tracking import MlflowClient
 
 # Override with: MLFLOW_TRACKING_URI and MLFLOW_EXPERIMENT_NAME
 tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns")
-experiment = os.environ.get("MLFLOW_EXPERIMENT_NAME", "PHTX_Alpha_Main")
+experiment = os.environ.get("MLFLOW_EXPERIMENT_NAME", "PERSFORMER_Alpha_Main")
 
 client = MlflowClient(tracking_uri)
 experiment_id = client.get_experiment_by_name(experiment).experiment_id

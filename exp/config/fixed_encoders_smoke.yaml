@@ -1,0 +1,28 @@
+experiment: FixedEncodersSmoke
+datasets: [MNIST]
+seeds: [4]
+batch_size: 128
+lr: 0.0003
+epochs: 1
+num_workers: 0
+max_train: 2048
+max_val: 512
+max_test: 512
+
+persistence_image:
+  runner: run_persistence_image.py
+  resolution: [28]
+  sigma2: [1.0]
+  weighting: [linear]
+  weight_power: [1.0]
+
+persistence_landscape:
+  runner: run_persistence_landscape.py
+  num_layers: [5]
+  resolution: [100]
+
+persistence_silhouette:
+  runner: run_persistence_silhouette.py
+  resolution: [100]
+  weighting: [linear]
+  weight_power: [1.0]

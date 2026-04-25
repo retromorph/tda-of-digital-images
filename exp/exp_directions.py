@@ -14,7 +14,7 @@ for seed, dataset, idx in product(cfg["seeds"], cfg["datasets"], cfg["filters"])
     subprocess.run(
         [
             sys.executable,
-            str(ROOT / "exp" / "run_phtx.py"),
+            str(ROOT / "exp" / "run_persformer.py"),
             "--experiment",
             cfg["experiment"],
             "--dataset",
