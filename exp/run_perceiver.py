@@ -1,5 +1,4 @@
 import random
-from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +20,7 @@ from torch.utils.data import DataLoader
 from src.models.perceiver import PerceiverPHT
 from src.trainer import TrainerPHTX
 from src.logger import MLFlowLogger
+from src.utils import get_mlflow_tracking_uri
 
 import argparse
 
@@ -74,7 +74,7 @@ torch.manual_seed(args.seed)
 torch.cuda.manual_seed_all(args.seed)
 
 # mlflow
-mlflow_url = "http://192.168.31.240:10001"
+mlflow_url = get_mlflow_tracking_uri()
 mlflow_project = "PHTX_{}".format(args.experiment)
 
 # device

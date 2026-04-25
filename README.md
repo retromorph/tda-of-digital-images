@@ -22,6 +22,22 @@ uv run jupyter notebook
 ```sh
 uv run python exp/run_phtx.py --dataset MNIST --help
 uv run python exp/exp_main.py
+uv run python exp/exp_invariance.py   # augmentation sweep (see exp/config/invariance.yaml)
+```
+
+### MLflow
+
+По умолчанию раннеры пишут в локальное хранилище `file:./mlruns`. Чтобы указать свой сервер:
+
+```sh
+export MLFLOW_TRACKING_URI=http://localhost:5000
+uv run python exp/run_phtx.py --dataset MNIST --epochs 1
+```
+
+Сводка по эксперименту (имя эксперимента можно задать через `MLFLOW_EXPERIMENT_NAME`):
+
+```sh
+MLFLOW_EXPERIMENT_NAME=MyExperiment uv run python scripts/mlflow_summarize.py
 ```
 
 ### PyTorch: CPU и CUDA

@@ -1,5 +1,5 @@
 experiment: N_filters
-datasets: [MNIST, EMNIST]
+datasets: [MNIST, EMNIST-B]
 seeds: [0, 1, 2, 3, 4]
 batch_size: 64
 lr: 0.001

@@ -9,7 +9,7 @@ def direction_filter(img, alpha, agg="mult"):
     if len(img.shape)==3:
         width, height = img.shape[1], img.shape[2]
     elif len(img.shape)==2:
-        width, height = img.shape[0], img.shape[1]
+        width, _height = img.shape[0], img.shape[1]
     else:
         raise ValueError()
         
@@ -40,7 +40,7 @@ def direction_filter(img, alpha, agg="mult"):
     elif agg=="max":
         g = np.maximum
     else:
-        raise ValueError("Aggregation function is either 'mult', 'min' or 'max'.")
+        raise ValueError("Aggregation function must be one of 'mult', 'add', 'min', or 'max'.")
     
     return torch.Tensor(g(filter_dir, img))
 

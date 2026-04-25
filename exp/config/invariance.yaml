@@ -1,17 +1,17 @@
 experiment: Invariance
-datasets: [MNIST, EMNIST]
+datasets: [MNIST, EMNIST-B]
+models: [MLP]
 seeds: [0, 1, 2, 3, 4]
 batch_size: 64
 lr: 0.001
 epochs: 100
 
+# Each entry: name must be a key in src.data.get_transform (noise, blur, affine, perspective, rotation).
+# "std" lists the `power` argument passed to run_* scripts (sigma, translation scale, degrees, etc.).
 transformations:
-  - 
-    name: GaussianNoise
+  - name: noise
     std: [0.005, 0.075, 0.01, 0.015, 0.02, 0.03, 0.05]
-  - 
-    name: GaussianBlur
-    std: [1, 2, 4]
-  - 
-    name: RandomAffine
-    std: [2, 4, 6, 8, 10]
+  - name: blur
+    std: [1.0, 2.0, 4.0]
+  - name: affine
+    std: [2.0, 4.0, 6.0, 8.0, 10.0]

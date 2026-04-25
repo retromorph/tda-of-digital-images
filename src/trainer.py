@@ -5,8 +5,6 @@ from statistics import fmean
 from .utils import argmin
 from tqdm import tqdm
 
-from .capsnet.losses import TotalLoss
-
 
 class Trainer():
 
@@ -157,58 +155,3 @@ class TrainerPHTX(Trainer):
         self.history[stage].append(fmean(loss_batches))
         if stage=="test":
             self.history["acc"].append(fmean(acc_batches))
-
-
-
-class TrainerCapsNet(Trainer):
-
-    def __init__(self, model, device, logger):
-        self.model = model
-        self.device = device
-        self.logger = logger
-
-        self.loss_fn = TotalLoss()
-        self.metric_fn = multiclass_accuracy
-
-        self.history = {"train": [], "val": [], "test": [], "acc": []}
-
-    def _train_step(self, dataloader, stage):
-        
-        loss_batches = []
-        for X, Y in dataloader:
-            X, Y = X.to(self.device), Y.to(self.device)
-            
-            X_hat, Y_hat = self.model(X, Y, mode="train")
-
-            loss_batch = self.loss_fn(X, Y, X_hat, Y_hat)
-            
-            loss_batch.backward()
-            self.optimizer.step()
-            self.optimizer.zero_grad()
-            
-            with torch.no_grad():
-                loss_batches.append(loss_batch.detach())
-
-        self.history[stage].append(fmean(loss_batches))
-
-    def _eval_step(self, dataloader, stage):
-
-        loss_batches = []
-        acc_batches = []
-        for X, Y in dataloader:
-            X, Y = X.to(self.device), Y.to(self.device)
-            
-            X_hat, Y_hat = self.model(X, Y, mode="eval")
-
-            loss_batch = self.loss_fn(X, Y, X_hat, Y_hat)
-            acc_batch = self.metric_fn(Y_hat, Y).detach()
-
-            loss_batches.append(loss_batch.detach())
-            if stage=="test":
-                acc_batches.append(acc_batch.detach())
-
-        self.history[stage].append(fmean(loss_batches))
-        if stage=="test":
-            self.history["acc"].append(fmean(acc_batches))
-
-

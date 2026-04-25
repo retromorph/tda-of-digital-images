@@ -1,35 +1,42 @@
-import random
-import numpy as np
-import torch
+"""Quick checks for dataloaders (no PHT precompute by default)."""
 
-from src.data import get_image_dataset, get_pht_dataset, collate_fn
+import sys
+from pathlib import Path
+
+import torch
 from torch.utils.data import DataLoader
 
-# randomness
-seed = 4
-idx = [0, 4]
-eps = 0.02
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-# get image datasets
-# dataset_train, dataset_val, dataset_test, meta = get_image_dataset("BLOBS", seed, output="2d")
+from src.data import collate_fn, get_image_dataset, get_pht_dataset
 
-# print(dataset_train.data.shape)
+seed = 0
 
-# print(dataset_train.targets.unique())
-# print(dataset_val.targets.shape)
-# print(dataset_test.targets.shape)
 
-# # get PHT datasets
-dataset_pht_train, dataset_pht_val, dataset_pht_test, _ = get_pht_dataset("MNIST", seed)
-dataloader = DataLoader(dataset_pht_train, batch_size=4, shuffle=False, collate_fn=collate_fn)
+def smoke_image():
+    dataset_train, dataset_val, dataset_test, meta = get_image_dataset(
+        "MNIST", seed, transform_str=None, power=0.0, output="2d"
+    )
+    dl = DataLoader(dataset_train, batch_size=4, shuffle=False, num_workers=0)
+    x, y = next(iter(dl))
+    print("image batch", x.shape, y.shape, "n_classes=", meta.n_classes)
 
-X, X_mask, Y = next(iter(dataloader))
 
-print("X", X.shape)
-print("M", X_mask.shape)
+def smoke_pht_if_cached():
+    """Only runs if diagram pickles already exist (avoids long PHT compute)."""
+    train_pkl = ROOT / "data" / "diagrams" / "MNIST" / "MNIST_train_seed-0.pkl"
+    if not train_pkl.is_file():
+        print("PHT smoke skipped (no cached diagrams); run make_datasets or a PHT runner once first.")
+        return
+    dataset_pht_train, _, _, _ = get_pht_dataset("MNIST", seed)
+    dl = DataLoader(dataset_pht_train, batch_size=4, shuffle=False, collate_fn=collate_fn, num_workers=0)
+    X, X_mask, Y = next(iter(dl))
+    print("PHT batch", X.shape, X_mask.shape, Y.shape)
 
-print(X_mask)
 
-# print(dataset_pht_train.data.shape, dataset_pht_train.targets.shape)
-# print(dataset_pht_val.data.shape, dataset_pht_val.targets.shape)
-# print(dataset_pht_test.data.shape, dataset_pht_test.targets.shape)
+if __name__ == "__main__":
+    smoke_image()
+    if "--pht" in sys.argv:
+        smoke_pht_if_cached()

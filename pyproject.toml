@@ -14,6 +14,7 @@ dependencies = [
     "torchmetrics",
     "torcheval",
     "numpy",
+    "scipy",
     "scikit-learn",
     "pandas",
     "matplotlib",
@@ -28,6 +29,7 @@ dependencies = [
     "tqdm",
     "mlflow",
     "pyyaml",
+    "porespy",
 ]
 
 [project.optional-dependencies]
@@ -38,4 +40,4 @@ mof = ["coremof-tools", "pymatgen", "pyzeo"]
 packages = ["src"]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["src/test_datasets.ipynb"]
+exclude = ["notebooks/test_datasets.ipynb"]

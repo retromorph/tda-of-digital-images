@@ -11,8 +11,6 @@ with open(ROOT / "exp" / "config" / "directions.yaml", "r") as f:
     cfg = yaml.load(f, Loader=yaml.FullLoader)
 
 for seed, dataset, idx in product(cfg["seeds"], cfg["datasets"], cfg["filters"]):
-    flag = 0 if len(idx) == 0 else 1
-
     subprocess.run(
         [
             sys.executable,
@@ -29,8 +27,6 @@ for seed, dataset, idx in product(cfg["seeds"], cfg["datasets"], cfg["filters"])
             str(cfg["lr"]),
             "--epochs",
             str(cfg["epochs"]),
-            "--flag",
-            str(flag),
             "--device",
             str(0),
             "--idx",

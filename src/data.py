@@ -1,21 +1,19 @@
-import random
 import numpy as np
 import torch
 
 from types import SimpleNamespace
 
-from multiprocessing import Pool
 from tqdm import tqdm
 
 import os
 import pickle
 
-# import porespy as ps
+import porespy as ps
 
 from torch.utils.data import Dataset
 from torchvision.datasets import MNIST, KMNIST, EMNIST, FashionMNIST
 from torchvision.transforms.v2 import Compose, ToDtype, Lambda
-from torchvision.transforms.v2 import GaussianNoise, RandomAffine, RandomPerspective, RandomRotation
+from torchvision.transforms.v2 import GaussianBlur, GaussianNoise, RandomAffine, RandomPerspective, RandomRotation
 from torchvision.transforms import InterpolationMode as IM
 
 from src.transforms_dir import Direction
@@ -205,8 +203,9 @@ def get_blobs():
 def get_transform(transform_str, power=0.0):
 
     transforms = {
-        "affine": lambda power: RandomAffine(0, (power/28, power/28), interpolation=IM.BILINEAR),
+        "affine": lambda power: RandomAffine(0, (power / 28, power / 28), interpolation=IM.BILINEAR),
         "noise": lambda power: GaussianNoise(sigma=power),
+        "blur": lambda power: GaussianBlur(kernel_size=5, sigma=(float(power), float(power))),
         "perspective": lambda power: RandomPerspective(distortion_scale=power, p=1.0, interpolation=IM.BILINEAR),
         "rotation": lambda power: RandomRotation(degrees=power, interpolation=IM.BILINEAR),
     }
@@ -238,9 +237,8 @@ def get_image_dataset(dataset_str, seed, transform_str=None, power=0.0, fraction
     meta = dataset_cfg["meta"]
 
     # fractions
-    f_train, f_val_ = fractions
+    f_train, _f_val = fractions
     n_train = int(len(dataset_train_val_) * f_train)
-    n_val_ = len(dataset_train_val_) - n_train
 
     # train, val, test as tensors
     train_val_random_idx = torch.randperm(len(dataset_train_val_), generator=torch.Generator().manual_seed(seed))
@@ -287,7 +285,6 @@ def get_pht_dataset(dataset_str, seed, idx=None, eps=None, transform_str=None, p
 
         print("Computing PHT of a dataset, this can take several minutes...")
         os.makedirs("./data/diagrams/{}".format(dataset_str), exist_ok=True)
-        pool = Pool(processes=8)
 
         # if train or val missing
         if not (os.path.isfile(train_filename) and os.path.isfile(val_filename)):

@@ -1,7 +1,14 @@
+import os
+
 import torch
 import torch.nn as nn
 
 from datetime import datetime
+
+
+def get_mlflow_tracking_uri() -> str:
+    """MLflow tracking URI: set ``MLFLOW_TRACKING_URI``; default local ``file:./mlruns``."""
+    return os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns")
 
 
 def get_activation(activation_str, alpha=0.0):
