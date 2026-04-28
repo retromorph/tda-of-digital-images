@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from torchvision.datasets import EMNIST, KMNIST, MNIST, FashionMNIST
+from torchvision.datasets import CIFAR10, EMNIST, KMNIST, MNIST, SVHN, FashionMNIST
 
 from src.datasets.synthetic import get_blobs_dataset
 
@@ -36,6 +36,16 @@ def get_dataset_cfg(dataset_str):
             "dataset_train_val": lambda: get_blobs_dataset(train=True),
             "dataset_test": lambda: get_blobs_dataset(train=False),
             "meta": SimpleNamespace(dim=64, n_classes=2),
+        },
+        "CIFAR-10": {
+            "dataset_train_val": lambda: CIFAR10(root="./data/image", train=True, download=True),
+            "dataset_test": lambda: CIFAR10(root="./data/image", train=False, download=True),
+            "meta": SimpleNamespace(dim=28, n_classes=10),
+        },
+        "SVHN": {
+            "dataset_train_val": lambda: SVHN(root="./data/image", split="train", download=True),
+            "dataset_test": lambda: SVHN(root="./data/image", split="test", download=True),
+            "meta": SimpleNamespace(dim=28, n_classes=10),
         },
     }
 

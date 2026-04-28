@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 from tqdm import tqdm
 
@@ -53,6 +54,39 @@ def _normalize_emnist_letters_labels(labels, dataset_str):
     return labels
 
 
+def _get_targets_tensor(dataset):
+    if hasattr(dataset, "targets"):
+        return torch.as_tensor(dataset.targets)
+    if hasattr(dataset, "labels"):
+        return torch.as_tensor(dataset.labels)
+    raise AttributeError("Dataset has neither 'targets' nor 'labels' attributes.")
+
+
+def _prepare_images(raw_images):
+    images = torch.as_tensor(raw_images)
+
+    if images.ndim == 3:
+        images = images.unsqueeze(1)
+    elif images.ndim == 4:
+        if images.shape[1] == 3:
+            images = images.float().mean(dim=1, keepdim=True)
+        elif images.shape[-1] == 3:
+            images = images.permute(0, 3, 1, 2).float().mean(dim=1, keepdim=True)
+        elif images.shape[1] == 1:
+            images = images.float()
+        elif images.shape[-1] == 1:
+            images = images.permute(0, 3, 1, 2).float()
+        else:
+            raise ValueError(f"Unsupported 4D image tensor shape: {tuple(images.shape)}")
+    else:
+        raise ValueError(f"Unsupported image tensor shape: {tuple(images.shape)}")
+
+    if images.shape[-2:] != (28, 28):
+        images = F.interpolate(images.float(), size=(28, 28), mode="bilinear", align_corners=False)
+
+    return images
+
+
 def _build_pht_apply():
     alphas = list(np.linspace(0, 360, 16 + 1)[:-1])
     direction = Direction(alphas, agg="add")
@@ -89,12 +123,17 @@ def get_image_dataset(cfg: ImageDatasetConfig):
     n_train = int(len(dataset_train_val_raw) * f_train)
     random_idx = torch.randperm(len(dataset_train_val_raw), generator=torch.Generator().manual_seed(cfg.seed))
 
-    x_train = transform_train_val(dataset_train_val_raw.data[random_idx[:n_train]].unsqueeze(1))
-    y_train = _normalize_emnist_letters_labels(dataset_train_val_raw.targets[random_idx[:n_train]], cfg.dataset_str)
-    x_val = transform_train_val(dataset_train_val_raw.data[random_idx[n_train:]].unsqueeze(1))
-    y_val = _normalize_emnist_letters_labels(dataset_train_val_raw.targets[random_idx[n_train:]], cfg.dataset_str)
-    x_test = transform_test(dataset_test_raw.data.unsqueeze(1))
-    y_test = _normalize_emnist_letters_labels(dataset_test_raw.targets, cfg.dataset_str)
+    train_val_images = _prepare_images(dataset_train_val_raw.data)
+    test_images = _prepare_images(dataset_test_raw.data)
+    train_val_targets = _get_targets_tensor(dataset_train_val_raw)
+    test_targets = _get_targets_tensor(dataset_test_raw)
+
+    x_train = transform_train_val(train_val_images[random_idx[:n_train]])
+    y_train = _normalize_emnist_letters_labels(train_val_targets[random_idx[:n_train]], cfg.dataset_str)
+    x_val = transform_train_val(train_val_images[random_idx[n_train:]])
+    y_val = _normalize_emnist_letters_labels(train_val_targets[random_idx[n_train:]], cfg.dataset_str)
+    x_test = transform_test(test_images)
+    y_test = _normalize_emnist_letters_labels(test_targets, cfg.dataset_str)
 
     dataset_train = ImageDataset(x_train, y_train)
     dataset_val = ImageDataset(x_val, y_val)
