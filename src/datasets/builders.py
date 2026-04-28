@@ -15,7 +15,7 @@ from src.datasets.registry import get_dataset_cfg
 from src.datasets.transforms import build_image_transforms
 from src.datasets.types import ImageDataset, PersistenceDataset
 from src.persistence import pht
-from src.transforms_dir import Direction
+from src.persistence.transforms import Direction
 
 
 @dataclass(frozen=True)

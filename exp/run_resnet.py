@@ -52,6 +52,9 @@ group.add_argument("--experiment", help="Experiment name", default="Test")
 group.add_argument("--num_workers", type=int, help="DataLoader workers", default=4)
 
 args = parser.parse_args()
+if sys.platform == "darwin" and args.num_workers > 0:
+    print("macOS spawn safety: overriding num_workers {} -> 0".format(args.num_workers))
+    args.num_workers = 0
 
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False

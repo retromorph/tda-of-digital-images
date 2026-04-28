@@ -49,6 +49,9 @@ group.add_argument("--max_train", type=int, default=None)
 group.add_argument("--max_val", type=int, default=None)
 group.add_argument("--max_test", type=int, default=None)
 args = parser.parse_args()
+if sys.platform == "darwin" and args.num_workers > 0:
+    print("macOS spawn safety: overriding num_workers {} -> 0".format(args.num_workers))
+    args.num_workers = 0
 
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
