@@ -68,6 +68,8 @@ MLFLOW_EXPERIMENT_NAME=MyExperiment uv run python scripts/mlflow_summarize.py
 
 2025 CoREMOF https://zenodo.org/records/15621349
 
+2D-porous-media-images-main https://github.com/gengshaoyang/2D-porous-media-images?utm_source=chatgpt.com
+
 ## Модели
 
 

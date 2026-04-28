@@ -9,6 +9,7 @@ import torch.nn.functional as F
 
 from tqdm import tqdm
 
+from src.datasets.porous import get_porous2d_clean_dataset
 from src.datasets.registry import get_dataset_cfg
 from src.datasets.transforms import build_image_transforms
 from src.datasets.types import ImageDataset, PersistenceDataset
@@ -116,8 +117,12 @@ def get_image_dataset(cfg: ImageDatasetConfig):
     transform_train_val, transform_test = build_image_transforms(cfg.transform_str, cfg.power, cfg.output)
 
     dataset_cfg = get_dataset_cfg(cfg.dataset_str)
-    dataset_train_val_raw = dataset_cfg["dataset_train_val"]()
-    dataset_test_raw = dataset_cfg["dataset_test"]()
+    if cfg.dataset_str == "POROUS2D-CLEAN":
+        dataset_train_val_raw = get_porous2d_clean_dataset(train=True, seed=cfg.seed, test_fraction=cfg.fractions[1])
+        dataset_test_raw = get_porous2d_clean_dataset(train=False, seed=cfg.seed, test_fraction=cfg.fractions[1])
+    else:
+        dataset_train_val_raw = dataset_cfg["dataset_train_val"]()
+        dataset_test_raw = dataset_cfg["dataset_test"]()
     meta = dataset_cfg["meta"]
 
     n_train = int(len(dataset_train_val_raw) * f_train)
