@@ -58,10 +58,19 @@ def _normalize_emnist_letters_labels(labels, dataset_str):
 
 def _get_targets_tensor(dataset):
     if hasattr(dataset, "targets"):
-        return torch.as_tensor(dataset.targets)
-    if hasattr(dataset, "labels"):
-        return torch.as_tensor(dataset.labels)
-    raise AttributeError("Dataset has neither 'targets' nor 'labels' attributes.")
+        targets = torch.as_tensor(dataset.targets)
+    elif hasattr(dataset, "labels"):
+        targets = torch.as_tensor(dataset.labels)
+    else:
+        raise AttributeError("Dataset has neither 'targets' nor 'labels' attributes.")
+
+    if targets.ndim > 1 and targets.shape[-1] == 1:
+        targets = targets.squeeze(-1)
+    if targets.ndim > 1:
+        targets = targets.reshape(targets.shape[0], -1)
+        if targets.shape[1] == 1:
+            targets = targets.squeeze(-1)
+    return targets
 
 
 def _prepare_images(raw_images):
@@ -143,6 +152,11 @@ def get_image_dataset(cfg: ImageDatasetConfig):
     y_val = _normalize_emnist_letters_labels(train_val_targets[random_idx[n_train:]], cfg.dataset_str)
     x_test = transform_test(test_images)
     y_test = _normalize_emnist_letters_labels(test_targets, cfg.dataset_str)
+
+    if getattr(meta, "task", "classification") == "classification":
+        y_train = y_train.long()
+        y_val = y_val.long()
+        y_test = y_test.long()
 
     dataset_train = ImageDataset(x_train, y_train)
     dataset_val = ImageDataset(x_val, y_val)

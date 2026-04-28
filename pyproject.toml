@@ -30,6 +30,7 @@ dependencies = [
     "mlflow",
     "pyyaml",
     "porespy",
+    "medmnist>=3.0.2",
 ]
 
 [project.optional-dependencies]
