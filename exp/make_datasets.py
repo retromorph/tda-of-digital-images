@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.data import get_pht_dataset
+from src.datasets import PersistenceDatasetConfig, get_persistence_dataset
 
 # randomness
 torch.backends.cudnn.deterministic = True
@@ -34,4 +34,11 @@ transforms = {
 for seed, dataset, transform in product(seeds, datasets, transforms):
     for power in transforms[transform]:
         print("Dataset: {}, transform: {}, power: {}, seed: {}".format(dataset, transform, power, seed))
-        get_pht_dataset(dataset, seed, transform_str=transform, power=power)
+        get_persistence_dataset(
+            PersistenceDatasetConfig(
+                dataset_str=dataset,
+                seed=seed,
+                transform_str=transform,
+                power=power,
+            )
+        )

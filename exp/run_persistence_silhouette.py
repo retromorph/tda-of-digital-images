@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.data import get_pht_dataset
+from src.datasets import PersistenceDatasetConfig, get_persistence_dataset
 from src.fixed_encoders import EncodedFeatureDataset, PersistenceSilhouetteEncoder
 from src.logger import MLFlowLogger
 from src.models.persistence_cnn1d import PersistenceCNN1D
@@ -61,8 +61,15 @@ mlflow_url = get_mlflow_tracking_uri()
 mlflow_project = "{}_{}".format(args.project, args.experiment)
 device = torch.device("cuda:{}".format(args.device)) if torch.cuda.is_available() else torch.device("cpu")
 
-dataset_train, dataset_val, dataset_test, meta = get_pht_dataset(
-    args.dataset, args.seed, args.idx, args.eps, args.transform, args.power
+dataset_train, dataset_val, dataset_test, meta = get_persistence_dataset(
+    PersistenceDatasetConfig(
+        dataset_str=args.dataset,
+        seed=args.seed,
+        idx=args.idx,
+        eps=args.eps,
+        transform_str=args.transform,
+        power=args.power,
+    )
 )
 encoder = PersistenceSilhouetteEncoder(
     resolution=args.resolution,

@@ -10,14 +10,26 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.data import collate_fn, get_image_dataset, get_pht_dataset
+from src.datasets import (
+    ImageDatasetConfig,
+    PersistenceDatasetConfig,
+    collate_fn,
+    get_image_dataset,
+    get_persistence_dataset,
+)
 
 seed = 0
 
 
 def smoke_image():
     dataset_train, dataset_val, dataset_test, meta = get_image_dataset(
-        "MNIST", seed, transform_str=None, power=0.0, output="2d"
+        ImageDatasetConfig(
+            dataset_str="MNIST",
+            seed=seed,
+            transform_str=None,
+            power=0.0,
+            output="2d",
+        )
     )
     dl = DataLoader(dataset_train, batch_size=4, shuffle=False, num_workers=0)
     x, y = next(iter(dl))
@@ -30,7 +42,9 @@ def smoke_pht_if_cached():
     if not train_pkl.is_file():
         print("PHT smoke skipped (no cached diagrams); run make_datasets or a PHT runner once first.")
         return
-    dataset_pht_train, _, _, _ = get_pht_dataset("MNIST", seed)
+    dataset_pht_train, _, _, _ = get_persistence_dataset(
+        PersistenceDatasetConfig(dataset_str="MNIST", seed=seed)
+    )
     dl = DataLoader(dataset_pht_train, batch_size=4, shuffle=False, collate_fn=collate_fn, num_workers=0)
     X, X_mask, Y = next(iter(dl))
     print("PHT batch", X.shape, X_mask.shape, Y.shape)

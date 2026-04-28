@@ -1,7 +1,7 @@
 """
 LatentPersformer: Persformer variant with a Perceiver latent encoder.
 
-Input tensor per point (from ``PersistenceTransformDataset`` / ``collate_fn``) has
+Input tensor per point (from ``PersistenceDataset`` / ``collate_fn``) has
 ``d_in=9`` channels with semantics:
 
 - ``[..., 0]``: birth time

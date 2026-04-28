@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.data import get_image_dataset
+from src.datasets import ImageDatasetConfig, get_image_dataset
 from src.logger import MLFlowLogger
 from src.models.mlp import MLP
 from src.trainer import Trainer
@@ -79,7 +79,13 @@ mlflow_project = "{}_{}".format(args.project, args.experiment)
 device = torch.device("cuda:{}".format(args.device)) if torch.cuda.is_available() else torch.device("cpu")
 
 images_train, images_val, images_test, meta = get_image_dataset(
-    args.dataset, args.seed, args.transform, args.power, output="1d"
+    ImageDatasetConfig(
+        dataset_str=args.dataset,
+        seed=args.seed,
+        transform_str=args.transform,
+        power=args.power,
+        output="1d",
+    )
 )
 dataloader_train = DataLoader(images_train, args.batch_size, shuffle=True, num_workers=args.num_workers)
 dataloader_val = DataLoader(images_val, args.batch_size, num_workers=args.num_workers)
