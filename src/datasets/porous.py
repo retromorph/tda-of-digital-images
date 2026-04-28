@@ -8,7 +8,7 @@ from PIL import Image
 
 from src.datasets.types import ImageDataset
 
-POROUS_ROOT = "./data/2D-porous-media-images"
+POROUS_ROOT = "../../data/2D-porous-media-images"
 POROUS_IMAGES_SUBDIR = "porous_media_images"
 POROUS_CSV_FILENAME = "permeability.csv"
 

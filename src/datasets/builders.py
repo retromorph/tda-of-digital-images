@@ -9,6 +9,7 @@ import torch.nn.functional as F
 
 from tqdm import tqdm
 
+from src.datasets.fingerprints import get_nist_sd04_dataset
 from src.datasets.porous import get_porous2d_clean_dataset
 from src.datasets.registry import get_dataset_cfg
 from src.datasets.transforms import build_image_transforms
@@ -120,6 +121,9 @@ def get_image_dataset(cfg: ImageDatasetConfig):
     if cfg.dataset_str == "POROUS2D-CLEAN":
         dataset_train_val_raw = get_porous2d_clean_dataset(train=True, seed=cfg.seed, test_fraction=cfg.fractions[1])
         dataset_test_raw = get_porous2d_clean_dataset(train=False, seed=cfg.seed, test_fraction=cfg.fractions[1])
+    elif cfg.dataset_str == "NIST-SD04":
+        dataset_train_val_raw = get_nist_sd04_dataset(train=True)
+        dataset_test_raw = get_nist_sd04_dataset(train=False)
     else:
         dataset_train_val_raw = dataset_cfg["dataset_train_val"]()
         dataset_test_raw = dataset_cfg["dataset_test"]()

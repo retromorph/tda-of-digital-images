@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 from torchvision.datasets import CIFAR10, EMNIST, KMNIST, MNIST, SVHN, FashionMNIST
 
+from src.datasets.fingerprints import get_nist_sd04_dataset
 from src.datasets.porous import get_porous2d_clean_dataset
 from src.datasets.synthetic import get_blobs_dataset
 
@@ -56,6 +57,11 @@ def get_dataset_cfg(dataset_str):
                 train=False,
             ),
             "meta": SimpleNamespace(dim=28, task="regression"),
+        },
+        "NIST-SD04": {
+            "dataset_train_val": lambda: get_nist_sd04_dataset(train=True),
+            "dataset_test": lambda: get_nist_sd04_dataset(train=False),
+            "meta": SimpleNamespace(dim=28, n_classes=5, task="classification"),
         },
     }
 

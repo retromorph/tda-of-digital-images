@@ -6,7 +6,6 @@ from tqdm import tqdm
 
 from src.datasets.types import ImageDataset
 
-
 def get_blobs_dataset(train=True):
     x_train, y_train, x_test, y_test = get_blobs()
     if train:

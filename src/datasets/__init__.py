@@ -4,6 +4,7 @@ from src.datasets.builders import (
     get_image_dataset,
     get_persistence_dataset,
 )
+from src.datasets.fingerprints import get_nist_sd04_dataset
 from src.datasets.registry import get_dataset_cfg
 from src.datasets.synthetic import get_blobs, get_blobs_dataset
 from src.datasets.transforms import build_image_transforms, get_transform
@@ -20,6 +21,7 @@ __all__ = [
     "get_blobs_dataset",
     "get_dataset_cfg",
     "get_image_dataset",
+    "get_nist_sd04_dataset",
     "get_persistence_dataset",
     "get_transform",
 ]
