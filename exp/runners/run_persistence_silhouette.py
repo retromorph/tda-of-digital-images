@@ -79,9 +79,19 @@ encoder = PersistenceSilhouetteEncoder(
     weighting=args.weighting,
     weight_power=args.weight_power,
 )
-train_features = EncodedFeatureDataset(dataset_train, encoder)
-val_features = EncodedFeatureDataset(dataset_val, encoder)
-test_features = EncodedFeatureDataset(dataset_test, encoder)
+base_cache_config = {
+    "dataset_str": args.dataset,
+    "seed": args.seed,
+    "idx": args.idx,
+    "eps": args.eps,
+    "transform_str": args.transform,
+    "power": args.power,
+    "fractions": [5 / 6, 1 / 6],
+}
+
+train_features = EncodedFeatureDataset(dataset_train, encoder, split="train", base_cache_config=base_cache_config)
+val_features = EncodedFeatureDataset(dataset_val, encoder, split="val", base_cache_config=base_cache_config)
+test_features = EncodedFeatureDataset(dataset_test, encoder, split="test", base_cache_config=base_cache_config)
 
 if args.max_train is not None:
     train_features = Subset(train_features, range(min(args.max_train, len(train_features))))

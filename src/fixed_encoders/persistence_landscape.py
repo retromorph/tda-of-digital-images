@@ -10,6 +10,12 @@ class PersistenceLandscapeEncoder:
         self.resolution = resolution
         self._transformer = Landscape(num_landscapes=num_layers, resolution=resolution)
 
+    def cache_config(self) -> dict:
+        return {
+            "num_layers": self.num_layers,
+            "resolution": self.resolution,
+        }
+
     def __call__(self, diagram: torch.Tensor) -> torch.Tensor:
         pairs = diagram_tensor_to_pairs(diagram)
         if len(pairs) == 0:

@@ -14,6 +14,13 @@ class PersistenceSilhouetteEncoder:
             resolution=resolution,
         )
 
+    def cache_config(self) -> dict:
+        return {
+            "resolution": self.resolution,
+            "weighting": self.weighting,
+            "weight_power": self.weight_power,
+        }
+
     def __call__(self, diagram: torch.Tensor) -> torch.Tensor:
         pairs = diagram_tensor_to_pairs(diagram)
         if len(pairs) == 0:
