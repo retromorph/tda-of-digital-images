@@ -13,7 +13,7 @@ with open(ROOT / "exp" / "config" / "main.yaml", "r") as f:
 for seed, dataset, model in product(cfg["seeds"], cfg["datasets"], cfg["models"]):
     cmd = [
         sys.executable,
-        str(ROOT / "exp" / "run_{}.py".format(model.lower())),
+        str(ROOT / "exp" / "runners" / "run_{}.py".format(model.lower())),
         "--experiment",
         cfg["experiment"],
         "--dataset",

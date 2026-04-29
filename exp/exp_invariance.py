@@ -23,7 +23,7 @@ for seed, dataset, model, tspec in product(
         subprocess.run(
             [
                 sys.executable,
-                str(ROOT / "exp" / f"run_{model.lower()}.py"),
+                str(ROOT / "exp" / "runners" / f"run_{model.lower()}.py"),
                 "--experiment",
                 cfg["experiment"],
                 "--dataset",

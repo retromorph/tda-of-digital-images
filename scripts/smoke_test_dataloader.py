@@ -40,7 +40,9 @@ def smoke_pht_if_cached():
     """Only runs if diagram pickles already exist (avoids long PHT compute)."""
     train_pkl = ROOT / "data" / "diagrams" / "MNIST" / "MNIST_train_seed-0.pkl"
     if not train_pkl.is_file():
-        print("PHT smoke skipped (no cached diagrams); run make_datasets or a PHT runner once first.")
+        print(
+            "PHT smoke skipped (no cached diagrams); run scripts/make_datasets.py or a PHT runner once first."
+        )
         return
     dataset_pht_train, _, _, _ = get_persistence_dataset(
         PersistenceDatasetConfig(dataset_str="MNIST", seed=seed)

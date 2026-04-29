@@ -19,7 +19,7 @@ def run_matrix(section_name, params):
     for dataset, seed, combo in product(cfg["datasets"], cfg["seeds"], product(*values)):
         cmd = [
             sys.executable,
-            str(ROOT / "exp" / runner),
+            str(ROOT / "exp" / "runners" / runner),
             "--experiment",
             cfg["experiment"],
             "--dataset",

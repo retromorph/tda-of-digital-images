@@ -33,7 +33,7 @@ def _append_arg(cmd, key, value):
 def build_cmd(cfg, task, method_name, method_cfg, seed):
     cmd = [
         sys.executable,
-        str(ROOT / "exp" / method_cfg["runner"]),
+        str(ROOT / "exp" / "runners" / method_cfg["runner"]),
     ]
 
     experiment_name = "{}_{}".format(cfg["experiment"], task["name"])

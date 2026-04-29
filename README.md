@@ -20,14 +20,14 @@ uv run jupyter notebook
 Запуск экспериментов (из корня репозитория):
 
 ```sh
-uv run python exp/run_persformer.py --dataset MNIST --help
-uv run python exp/run_latent_persformer.py --dataset MNIST --help
-uv run python exp/run_linear_persformer.py --dataset MNIST --help
+uv run python exp/runners/run_persformer.py --dataset MNIST --help
+uv run python exp/runners/run_latent_persformer.py --dataset MNIST --help
+uv run python exp/runners/run_linear_persformer.py --dataset MNIST --help
 uv run python exp/exp_main.py
 uv run python exp/exp_invariance.py   # augmentation sweep (see exp/config/invariance.yaml)
-uv run python exp/run_persistence_image.py --dataset MNIST --epochs 1
-uv run python exp/run_persistence_landscape.py --dataset MNIST --epochs 1
-uv run python exp/run_persistence_silhouette.py --dataset MNIST --epochs 1
+uv run python exp/runners/run_persistence_image.py --dataset MNIST --epochs 1
+uv run python exp/runners/run_persistence_landscape.py --dataset MNIST --epochs 1
+uv run python exp/runners/run_persistence_silhouette.py --dataset MNIST --epochs 1
 uv run python exp/exp_fixed_encoders.py
 ```
 
@@ -49,7 +49,7 @@ uv run python exp/exp_fixed_encoders.py
 
 ```sh
 export MLFLOW_TRACKING_URI=http://localhost:5000
-uv run python exp/run_persformer.py --dataset MNIST --epochs 1
+uv run python exp/runners/run_persformer.py --dataset MNIST --epochs 1
 ```
 
 Сводка по эксперименту (имя эксперимента можно задать через `MLFLOW_EXPERIMENT_NAME`):
