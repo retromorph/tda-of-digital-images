@@ -1,7 +1,7 @@
 experiment: PreliminaryTDA
 
 seeds: [0, 1, 2]
-device: 0
+device: "mps"
 num_workers: 2
 
 common_persistence:
@@ -13,18 +13,18 @@ tasks:
     dataset: MNIST
     transform: null
     power: 0.0
-  - name: kmnist_clean
-    dataset: KMNIST
-    transform: null
-    power: 0.0
-  - name: fmnist_clean
-    dataset: FMNIST
-    transform: null
-    power: 0.0
-  - name: emnistb_clean
-    dataset: EMNIST-B
-    transform: null
-    power: 0.0
+  # - name: kmnist_clean
+  #   dataset: KMNIST
+  #   transform: null
+  #   power: 0.0
+  # - name: fmnist_clean
+  #   dataset: FMNIST
+  #   transform: null
+  #   power: 0.0
+  # - name: emnistb_clean
+  #   dataset: EMNIST-B
+  #   transform: null
+  #   power: 0.0
 
 methods:
   persistent_image:

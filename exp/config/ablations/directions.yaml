@@ -4,6 +4,7 @@ seeds: [0]
 batch_size: 128
 lr: 0.001
 epochs: 100
+device: "mps"
 filters: [
   [0], [1], [2], [3],
   [4], [5], [6], [7],

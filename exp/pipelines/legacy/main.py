@@ -29,6 +29,7 @@ for seed, dataset, model in product(cfg["seeds"], cfg["datasets"], cfg["models"]
         "--batch_size",
         str(cfg["batch_size"]),
     ]
+    cmd.extend(["--device", str(cfg["device"])])
     if "lr" in cfg:
         cmd.extend(["--lr", str(cfg["lr"])])
     if "epochs" in cfg:

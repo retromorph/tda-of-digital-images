@@ -41,7 +41,7 @@ group.add_argument("--lr", type=float, default=0.0003)
 group.add_argument("--batch_size", type=int, default=128)
 group.add_argument("--epochs", type=int, default=20)
 group.add_argument("--seed", type=int, default=0)
-group.add_argument("--device", type=int, default=0)
+group.add_argument("--device", type=str, required=True, help="Device name (e.g. cpu, mps, cuda:0)")
 group.add_argument("--project", default="FixedEncoders")
 group.add_argument("--experiment", default="Smoke")
 group.add_argument("--num_workers", type=int, default=0)
@@ -62,7 +62,7 @@ torch.cuda.manual_seed_all(args.seed)
 
 mlflow_url = get_mlflow_tracking_uri()
 mlflow_project = "{}_{}".format(args.project, args.experiment)
-device = torch.device("cuda:{}".format(args.device)) if torch.cuda.is_available() else torch.device("cpu")
+device = torch.device(args.device)
 
 dataset_train, dataset_val, dataset_test, meta = get_persistence_dataset(
     PersistenceDatasetConfig(

@@ -32,6 +32,8 @@ def run_matrix(section_name, params):
             dataset,
             "--seed",
             str(seed),
+            "--device",
+            str(cfg["device"]),
             "--batch_size",
             str(cfg["batch_size"]),
             "--lr",

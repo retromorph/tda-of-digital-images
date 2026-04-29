@@ -44,7 +44,7 @@ group.add_argument("--batch_size", type=int, help="Batch size", default=128)
 group.add_argument("--epochs", type=int, help="Number of epochs", default=50)
 
 group.add_argument("--seed", type=int, help="Seed", default=0)
-group.add_argument("--device", type=int, help="CUDA device id", default=0)
+group.add_argument("--device", type=str, required=True, help="Device name (e.g. cpu, mps, cuda:0)")
 
 group.add_argument("--project", help="MLflow project prefix", default="ImageModels")
 group.add_argument("--experiment", help="Experiment name", default="Test")
@@ -67,7 +67,7 @@ torch.cuda.manual_seed_all(args.seed)
 mlflow_url = get_mlflow_tracking_uri()
 mlflow_project = "{}_{}".format(args.project, args.experiment)
 
-device = torch.device("cuda:{}".format(args.device)) if torch.cuda.is_available() else torch.device("cpu")
+device = torch.device(args.device)
 
 images_train, images_val, images_test, meta = get_image_dataset(
     ImageDatasetConfig(

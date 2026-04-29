@@ -5,6 +5,7 @@ seeds: [0, 1, 2, 3, 4]
 batch_size: 64
 lr: 0.001
 epochs: 100
+device: "mps"
 
 # Each entry: name must be a key in src.data.get_transform (noise, blur, affine, perspective, rotation).
 # "std" lists the `power` argument passed to run_* scripts (sigma, translation scale, degrees, etc.).

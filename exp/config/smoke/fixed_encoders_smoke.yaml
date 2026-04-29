@@ -4,6 +4,7 @@ seeds: [4]
 batch_size: 128
 lr: 0.0003
 epochs: 1
+device: "mps"
 num_workers: 0
 max_train: 2048
 max_val: 512

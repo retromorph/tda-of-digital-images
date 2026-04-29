@@ -34,7 +34,7 @@ for seed, dataset, idx in product(cfg["seeds"], cfg["datasets"], cfg["filters"])
             "--epochs",
             str(cfg["epochs"]),
             "--device",
-            str(0),
+            str(cfg["device"]),
             "--idx",
         ]
         + [str(item) for item in idx],

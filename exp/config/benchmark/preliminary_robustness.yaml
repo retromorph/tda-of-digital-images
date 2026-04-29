@@ -1,7 +1,7 @@
 experiment: PreliminaryTDA_Robustness
 
 seeds: [0, 1, 2]
-device: 0
+device: "mps"
 num_workers: 2
 
 common_persistence:

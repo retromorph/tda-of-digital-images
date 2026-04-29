@@ -36,6 +36,8 @@ for seed, dataset, model, tspec in product(
                 dataset,
                 "--seed",
                 str(seed),
+                "--device",
+                str(cfg["device"]),
                 "--batch_size",
                 str(cfg["batch_size"]),
                 "--lr",

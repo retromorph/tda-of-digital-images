@@ -59,7 +59,7 @@ def build_cmd(cfg, task, method_name, method_cfg, seed):
     cmd.extend(["--experiment", experiment_name])
     cmd.extend(["--dataset", task["dataset"]])
     cmd.extend(["--seed", str(seed)])
-    cmd.extend(["--device", str(cfg.get("device", 0))])
+    cmd.extend(["--device", str(cfg["device"])])
     cmd.extend(["--num_workers", str(cfg.get("num_workers", 0))])
 
     common_persistence = cfg.get("common_persistence", {})

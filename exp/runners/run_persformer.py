@@ -75,7 +75,7 @@ group.add_argument("--batch_size", type=int, help="Batch size", default=32)
 group.add_argument("--epochs", type=int, help="Number of epochs", default=1000)
 
 group.add_argument("--seed", type=int, help="Seed", default=0)
-group.add_argument("--device", type=int, help="CUDA device id", default=0)
+group.add_argument("--device", type=str, required=True, help="Device name (e.g. cpu, mps, cuda:0)")
 group.add_argument("--experiment", help="Experiment name", default="Test")
 
 group.add_argument("--num_workers", type=int, help="DataLoader workers", default=2)
@@ -96,7 +96,7 @@ torch.cuda.manual_seed_all(args.seed)
 mlflow_url = get_mlflow_tracking_uri()
 mlflow_project = "PERSFORMER_{}".format(args.experiment)
 
-device = torch.device("cuda:{}".format(args.device)) if torch.cuda.is_available() else torch.device("cpu")
+device = torch.device(args.device)
 
 dataset_train, dataset_val, dataset_test, meta = get_persistence_dataset(
     PersistenceDatasetConfig(
