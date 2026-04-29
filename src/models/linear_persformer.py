@@ -114,6 +114,19 @@ class LinearPersformer(nn.Module):
             X = torch.nn.functional.pad(X, (0, 0, 0, pad_len), value=0.0)
             mask = torch.nn.functional.pad(mask, (0, pad_len), value=True)
 
+        # `NystromformerSelfAttention` in `transformers` caches `config.segment_means_seq_len`
+        # as `self.seq_len` at init-time. Since our diagrams are padded to a *batch-dependent*
+        # length, we must resync it with the padded `seq_length` before the forward pass.
+        #
+        # Otherwise, landmark reshape sizes mismatch and we crash in:
+        # `modeling_nystromformer.py` -> `kernel_1 = softmax(matmul(...))`.
+        current_seq_len = X.shape[1]
+        if getattr(self.encoder, "config", None) is not None:
+            self.encoder.config.segment_means_seq_len = int(current_seq_len)
+        for m in self.encoder.modules():
+            if hasattr(m, "seq_len"):
+                m.seq_len = int(current_seq_len)
+
         attention_mask = (~mask).long()
         out = self.encoder(inputs_embeds=X, attention_mask=attention_mask)
         encoded = out.last_hidden_state[:, :S, :]
