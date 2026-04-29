@@ -1,11 +1,13 @@
 import argparse
+import os
+import tempfile
 from pathlib import Path
 
 import mlflow
 import pandas as pd
 import yaml
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def _metric_col(metric_name):
@@ -19,6 +21,23 @@ def _param_col(param_name):
 def load_cfg(path):
     with open(path, "r") as f:
         return yaml.load(f, Loader=yaml.FullLoader)
+
+
+def resolve_config_path(path):
+    p = Path(path)
+    if p.exists():
+        return p
+    candidates = [
+        ROOT / "exp" / "config" / "benchmark" / p.name,
+        ROOT / "exp" / "config" / "ablations" / p.name,
+        ROOT / "exp" / "config" / "smoke" / p.name,
+        ROOT / "exp" / "config" / "legacy" / p.name,
+        ROOT / "exp" / "config" / p.name,
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return p
 
 
 def expected_experiment_name(root_name, task_name):
@@ -122,7 +141,7 @@ def main():
     parser = argparse.ArgumentParser(description="Aggregate preliminary benchmark MLflow results.")
     parser.add_argument(
         "--config",
-        default=str(ROOT / "exp" / "config" / "preliminary_clean.yaml"),
+        default=str(ROOT / "exp" / "config" / "benchmark" / "preliminary_clean.yaml"),
         help="Benchmark config used for runs.",
     )
     parser.add_argument(
@@ -130,33 +149,50 @@ def main():
         default="acc_test_at_val_best",
         help="Metric name in MLflow (without 'metrics.' prefix).",
     )
+    parser.add_argument("--run_name", default=None, help="Optional MLflow run name for report artifacts.")
     parser.add_argument(
-        "--out_dir",
-        default=str(ROOT / "exp" / "artifacts"),
-        help="Directory for CSV outputs.",
+        "--artifact_path",
+        default="preliminary_reports",
+        help="Artifact subdirectory inside the MLflow run.",
+    )
+    parser.add_argument(
+        "--artifact_experiment",
+        default="EXP_ARTIFACTS",
+        help="MLflow experiment for report artifact runs.",
     )
     args = parser.parse_args()
 
-    cfg = load_cfg(args.config)
+    cfg_path = resolve_config_path(args.config)
+    cfg = load_cfg(cfg_path)
     df = gather_rows(cfg, args.metric)
     per_task, leaderboard, raw = summarize(df)
 
-    out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns")
+    mlflow.set_tracking_uri(tracking_uri)
+    mlflow.set_experiment(args.artifact_experiment)
 
-    stem = Path(args.config).stem
-    raw_path = out_dir / "{}_raw.csv".format(stem)
-    per_task_path = out_dir / "{}_per_task.csv".format(stem)
-    leaderboard_path = out_dir / "{}_leaderboard.csv".format(stem)
+    stem = Path(cfg_path).stem
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        raw_path = tmp / "{}_raw.csv".format(stem)
+        per_task_path = tmp / "{}_per_task.csv".format(stem)
+        leaderboard_path = tmp / "{}_leaderboard.csv".format(stem)
 
-    raw.to_csv(raw_path, index=False)
-    per_task.to_csv(per_task_path, index=False)
-    leaderboard.to_csv(leaderboard_path, index=False)
+        raw.to_csv(raw_path, index=False)
+        per_task.to_csv(per_task_path, index=False)
+        leaderboard.to_csv(leaderboard_path, index=False)
 
-    print("Saved:")
-    print(" - {}".format(raw_path))
-    print(" - {}".format(per_task_path))
-    print(" - {}".format(leaderboard_path))
+        run_name = args.run_name or "{}_report".format(cfg["experiment"])
+        with mlflow.start_run(run_name=run_name):
+            mlflow.log_param("config_path", str(cfg_path))
+            mlflow.log_param("metric", args.metric)
+            mlflow.log_artifact(str(raw_path), artifact_path=args.artifact_path)
+            mlflow.log_artifact(str(per_task_path), artifact_path=args.artifact_path)
+            mlflow.log_artifact(str(leaderboard_path), artifact_path=args.artifact_path)
+            artifact_uri = mlflow.get_artifact_uri(args.artifact_path)
+
+    print("Logged report artifacts:")
+    print(" - {}".format(artifact_uri))
 
     if leaderboard.empty:
         print("\nNo runs found for given config/metric.")

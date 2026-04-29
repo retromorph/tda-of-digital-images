@@ -1,14 +1,17 @@
 import argparse
 import json
+import os
 import subprocess
 import sys
+import tempfile
 import time
 from itertools import product
 from pathlib import Path
 
+import mlflow
 import yaml
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def _to_cli_flag(k):
@@ -28,6 +31,22 @@ def _append_arg(cmd, key, value):
     if value is None:
         return
     cmd.extend([_to_cli_flag(key), str(value)])
+
+
+def _resolve_cfg_path(cfg_path: Path) -> Path:
+    if cfg_path.exists():
+        return cfg_path
+    candidates = [
+        ROOT / "exp" / "config" / "benchmark" / cfg_path.name,
+        ROOT / "exp" / "config" / "ablations" / cfg_path.name,
+        ROOT / "exp" / "config" / "smoke" / cfg_path.name,
+        ROOT / "exp" / "config" / "legacy" / cfg_path.name,
+        ROOT / "exp" / "config" / cfg_path.name,
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return cfg_path
 
 
 def build_cmd(cfg, task, method_name, method_cfg, seed):
@@ -65,7 +84,28 @@ def build_cmd(cfg, task, method_name, method_cfg, seed):
     return cmd
 
 
+def _log_manifest_to_mlflow(cfg, cfg_path, manifest, total, failures):
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns")
+    mlflow.set_tracking_uri(tracking_uri)
+    mlflow.set_experiment("EXP_ARTIFACTS")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_path = Path(tmpdir) / "preliminary_manifest.json"
+        with open(out_path, "w") as f:
+            json.dump(manifest, f, indent=2)
+
+        run_name = "preliminary_manifest_{}_{}".format(cfg["experiment"], int(time.time()))
+        with mlflow.start_run(run_name=run_name):
+            mlflow.log_param("experiment_root", str(cfg["experiment"]))
+            mlflow.log_param("config_path", str(cfg_path))
+            mlflow.log_metric("total_runs", total)
+            mlflow.log_metric("failures", failures)
+            mlflow.log_artifact(str(out_path), artifact_path="preliminary")
+            return mlflow.get_artifact_uri("preliminary")
+
+
 def run(cfg_path, dry_run=False, only_method=None, only_task=None):
+    cfg_path = _resolve_cfg_path(Path(cfg_path))
     with open(cfg_path, "r") as f:
         cfg = yaml.load(f, Loader=yaml.FullLoader)
 
@@ -116,14 +156,8 @@ def run(cfg_path, dry_run=False, only_method=None, only_task=None):
         if code != 0:
             failures += 1
 
-    out_dir = ROOT / "exp" / "artifacts"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = int(time.time())
-    out_path = out_dir / "preliminary_manifest_{}.json".format(stamp)
-    with open(out_path, "w") as f:
-        json.dump(manifest, f, indent=2)
-
-    print("\nSaved manifest: {}".format(out_path))
+    artifact_uri = _log_manifest_to_mlflow(cfg, cfg_path, manifest, total, failures)
+    print("\nLogged manifest artifact: {}".format(artifact_uri))
     print("Runs: {}, failures: {}".format(total, failures))
     return 1 if failures > 0 else 0
 
@@ -134,7 +168,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--config",
-        default=str(ROOT / "exp" / "config" / "preliminary_clean.yaml"),
+        default=str(ROOT / "exp" / "config" / "benchmark" / "preliminary_clean.yaml"),
         help="Path to YAML benchmark config.",
     )
     parser.add_argument("--dry_run", action=argparse.BooleanOptionalAction, default=False)

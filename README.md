@@ -23,12 +23,14 @@ uv run jupyter notebook
 uv run python exp/runners/run_persformer.py --dataset MNIST --help
 uv run python exp/runners/run_latent_persformer.py --dataset MNIST --help
 uv run python exp/runners/run_linear_persformer.py --dataset MNIST --help
-uv run python exp/exp_main.py
-uv run python exp/exp_invariance.py   # augmentation sweep (see exp/config/invariance.yaml)
+uv run python exp/pipelines/legacy/main.py
+uv run python exp/pipelines/ablations/invariance.py   # augmentation sweep (see exp/config/ablations/invariance.yaml)
 uv run python exp/runners/run_persistence_image.py --dataset MNIST --epochs 1
 uv run python exp/runners/run_persistence_landscape.py --dataset MNIST --epochs 1
 uv run python exp/runners/run_persistence_silhouette.py --dataset MNIST --epochs 1
-uv run python exp/exp_fixed_encoders.py
+uv run python exp/pipelines/smoke/fixed_encoders.py
+uv run python exp/pipelines/benchmark/preliminary_benchmark.py --config exp/config/benchmark/preliminary_clean.yaml --dry_run
+uv run python exp/pipelines/benchmark/aggregate_preliminary_results.py --config exp/config/benchmark/preliminary_clean.yaml
 ```
 
 ### Classical fixed encoders
@@ -57,6 +59,8 @@ uv run python exp/runners/run_persformer.py --dataset MNIST --epochs 1
 ```sh
 MLFLOW_EXPERIMENT_NAME=MyExperiment uv run python scripts/mlflow_summarize.py
 ```
+
+Оркестратор `preliminary_benchmark.py` и отчёт `aggregate_preliminary_results.py` логируют runtime-артефакты (manifest/CSV) напрямую в MLflow artifacts.
 
 ### PyTorch: CPU и CUDA
 

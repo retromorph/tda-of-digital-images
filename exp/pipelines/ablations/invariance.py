@@ -7,9 +7,15 @@ from pathlib import Path
 
 import yaml
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 
-with open(ROOT / "exp" / "config" / "invariance.yaml", "r") as f:
+def _resolve_cfg_path():
+    new_path = ROOT / "exp" / "config" / "ablations" / "invariance.yaml"
+    if new_path.exists():
+        return new_path
+    return ROOT / "exp" / "config" / "invariance.yaml"
+
+with open(_resolve_cfg_path(), "r") as f:
     cfg = yaml.load(f, Loader=yaml.FullLoader)
 
 models = cfg.get("models", ["MLP"])
