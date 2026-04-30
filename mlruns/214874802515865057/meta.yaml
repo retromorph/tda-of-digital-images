@@ -1,8 +1,0 @@
-artifact_location: file:///Users/musik/Documents/education/tda-of-digital-images/mlruns/214874802515865057
-creation_time: 1777466031409
-experiment_id: '214874802515865057'
-last_update_time: 1777466031409
-lifecycle_stage: active
-name: DeepSets_PreliminaryTDA_mnist_clean
-trace_location: null
-workspace: default
