@@ -1,0 +1,8 @@
+artifact_location: file:///Users/musik/Documents/education/tda-of-digital-images/mlruns/833676000499133065
+creation_time: 1777465745473
+experiment_id: '833676000499133065'
+last_update_time: 1777465745473
+lifecycle_stage: active
+name: FixedEncodersPL_PreliminaryTDA_mnist_clean
+trace_location: null
+workspace: default

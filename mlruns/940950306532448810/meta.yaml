@@ -1,0 +1,8 @@
+artifact_location: file:///Users/musik/Documents/education/tda-of-digital-images/mlruns/940950306532448810
+creation_time: 1777467049997
+experiment_id: '940950306532448810'
+last_update_time: 1777467049997
+lifecycle_stage: active
+name: PERSFORMER_PreliminaryTDA_mnist_clean
+trace_location: null
+workspace: default
