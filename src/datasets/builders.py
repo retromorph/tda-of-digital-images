@@ -9,13 +9,18 @@ import torch.nn.functional as F
 
 from tqdm import tqdm
 
-from src.datasets.fingerprints import get_nist_sd04_dataset
-from src.datasets.porous import get_porous2d_clean_dataset
 from src.datasets.registry import get_dataset_cfg
+from src.datasets.cache import (
+    load_cache,
+    save_cache,
+    split_cache_path,
+    stable_hash,
+    write_meta,
+)
 from src.datasets.transforms import build_image_transforms
 from src.datasets.types import ImageDataset, PersistenceDataset
-from src.persistence import pht
-from src.persistence.transforms import Direction
+from src.filtrations import FILTRATIONS  # noqa: F401
+from src.registry import FILTRATIONS
 
 
 @dataclass(frozen=True)
@@ -37,6 +42,9 @@ class PersistenceDatasetConfig:
     transform_str: str | None = None
     power: float = 0.0
     fractions: tuple[float, float] = (5 / 6, 1 / 6)
+    filtration: str = "pht_directional"
+    filtration_params: dict | None = None
+    sin_encoding_config: list[float] | None = None
 
 
 def _validate_fractions(fractions):
@@ -73,16 +81,18 @@ def _get_targets_tensor(dataset):
     return targets
 
 
-def _prepare_images(raw_images):
+def _prepare_images(raw_images, meta):
     images = torch.as_tensor(raw_images)
 
+    target_h, target_w = tuple(meta.image_size)
+
     if images.ndim == 3:
-        images = images.unsqueeze(1)
+        images = images.unsqueeze(1).float()
     elif images.ndim == 4:
         if images.shape[1] == 3:
-            images = images.float().mean(dim=1, keepdim=True)
+            images = images.float()
         elif images.shape[-1] == 3:
-            images = images.permute(0, 3, 1, 2).float().mean(dim=1, keepdim=True)
+            images = images.permute(0, 3, 1, 2).float()
         elif images.shape[1] == 1:
             images = images.float()
         elif images.shape[-1] == 1:
@@ -92,31 +102,41 @@ def _prepare_images(raw_images):
     else:
         raise ValueError(f"Unsupported image tensor shape: {tuple(images.shape)}")
 
-    if images.shape[-2:] != (28, 28):
-        images = F.interpolate(images.float(), size=(28, 28), mode="bilinear", align_corners=False)
+    if meta.color == "gray" and images.shape[1] == 3:
+        images = images.mean(dim=1, keepdim=True)
+    if meta.color == "rgb" and images.shape[1] == 1:
+        images = images.repeat(1, 3, 1, 1)
+    if images.shape[-2:] != (target_h, target_w):
+        images = F.interpolate(images.float(), size=(target_h, target_w), mode="bilinear", align_corners=False)
 
     return images
 
 
-def _build_pht_apply():
-    alphas = list(np.linspace(0, 360, 16 + 1)[:-1])
-    direction = Direction(alphas, agg="add")
-
-    def pht_apply(image):
-        return pht(direction(image), image, pos=alphas)
-
-    return pht_apply
-
-
-def _compute_or_load_diagrams(dataset, labels, filename, pht_apply):
-    if os.path.isfile(filename):
-        return pickle.load(open(filename, "rb"))
-
+def _compute_diagrams(dataset, labels, filtration_apply):
     diagrams = []
+    schema = None
     for item in tqdm(dataset.data):
-        diagrams.append(pht_apply(item))
-    pickle.dump((diagrams, labels), open(filename, "wb"))
-    return diagrams, labels
+        out = filtration_apply(item)
+        diagrams.append(out.points)
+        if schema is None:
+            schema = out.schema
+    return diagrams, labels, (schema or {})
+
+
+def _load_legacy_cache(path):
+    if not os.path.isfile(path):
+        return None
+    payload = pickle.load(open(path, "rb"))
+    if isinstance(payload, tuple) and len(payload) == 2:
+        diagrams, labels = payload
+        return {"diagrams": diagrams, "labels": labels, "schema": {}}
+    if isinstance(payload, dict):
+        return {
+            "diagrams": payload.get("diagrams", []),
+            "labels": payload.get("labels"),
+            "schema": payload.get("schema", {}),
+        }
+    return None
 
 
 def get_image_dataset(cfg: ImageDatasetConfig):
@@ -127,22 +147,13 @@ def get_image_dataset(cfg: ImageDatasetConfig):
     transform_train_val, transform_test = build_image_transforms(cfg.transform_str, cfg.power, cfg.output)
 
     dataset_cfg = get_dataset_cfg(cfg.dataset_str)
-    if cfg.dataset_str == "POROUS2D-CLEAN":
-        dataset_train_val_raw = get_porous2d_clean_dataset(train=True, seed=cfg.seed, test_fraction=cfg.fractions[1])
-        dataset_test_raw = get_porous2d_clean_dataset(train=False, seed=cfg.seed, test_fraction=cfg.fractions[1])
-    elif cfg.dataset_str == "NIST-SD04":
-        dataset_train_val_raw = get_nist_sd04_dataset(train=True)
-        dataset_test_raw = get_nist_sd04_dataset(train=False)
-    else:
-        dataset_train_val_raw = dataset_cfg["dataset_train_val"]()
-        dataset_test_raw = dataset_cfg["dataset_test"]()
-    meta = dataset_cfg["meta"]
+    dataset_train_val_raw, dataset_test_raw, meta = dataset_cfg["dataset_loader"](cfg.seed, cfg.fractions)
 
     n_train = int(len(dataset_train_val_raw) * f_train)
     random_idx = torch.randperm(len(dataset_train_val_raw), generator=torch.Generator().manual_seed(cfg.seed))
 
-    train_val_images = _prepare_images(dataset_train_val_raw.data)
-    test_images = _prepare_images(dataset_test_raw.data)
+    train_val_images = _prepare_images(dataset_train_val_raw.data, meta)
+    test_images = _prepare_images(dataset_test_raw.data, meta)
     train_val_targets = _get_targets_tensor(dataset_train_val_raw)
     test_targets = _get_targets_tensor(dataset_test_raw)
 
@@ -179,37 +190,45 @@ def get_persistence_dataset(cfg: PersistenceDatasetConfig):
     y_val = dataset_val.targets
     y_test = dataset_test.targets
 
+    filt_params = cfg.filtration_params or {}
+    cache_key = stable_hash(cfg.filtration, filt_params)
+    train_filename = split_cache_path(cfg.dataset_str, cache_key, "train", cfg.seed)
+    val_filename = split_cache_path(cfg.dataset_str, cache_key, "val", cfg.seed)
+    test_filename = split_cache_path(cfg.dataset_str, cache_key, "test", cfg.seed)
+
+    filtration_apply = FILTRATIONS.get(cfg.filtration)(filt_params)
     transform_prefix = f"{cfg.transform_str}-{cfg.power}_" if cfg.transform_str is not None else ""
-    train_filename = f"./data/diagrams/{cfg.dataset_str}/{cfg.dataset_str}_train_seed-{cfg.seed}.pkl"
-    val_filename = f"./data/diagrams/{cfg.dataset_str}/{cfg.dataset_str}_val_seed-{cfg.seed}.pkl"
-    test_filename = f"./data/diagrams/{cfg.dataset_str}/{cfg.dataset_str}_test_{transform_prefix}seed-{cfg.seed}.pkl"
+    suffix = f"seed-{cfg.seed}"
+    legacy_train = f"./data/diagrams/{cfg.dataset_str}/{cfg.dataset_str}_train_{suffix}.pkl"
+    legacy_val = f"./data/diagrams/{cfg.dataset_str}/{cfg.dataset_str}_val_{suffix}.pkl"
+    legacy_test = f"./data/diagrams/{cfg.dataset_str}/{cfg.dataset_str}_test_{transform_prefix}{suffix}.pkl"
 
-    pht_apply = _build_pht_apply()
+    def _get_split(split_name, ds, ys, path, legacy_path):
+        payload = load_cache(path)
+        if payload is not None:
+            return payload
+        if cfg.filtration == "pht_directional" and len(filt_params) == 0:
+            legacy = _load_legacy_cache(legacy_path)
+            if legacy is not None:
+                return legacy
+        print(f"Computing filtration for {split_name}, this can take several minutes...")
+        dgm, labels, schema = _compute_diagrams(ds, ys, filtration_apply)
+        payload = {"diagrams": dgm, "labels": labels, "schema": schema}
+        save_cache(path, payload)
+        write_meta(
+            dataset=cfg.dataset_str,
+            cache_key=cache_key,
+            filtration_name=cfg.filtration,
+            filtration_params=filt_params,
+            schema=schema,
+        )
+        return payload
 
-    if not (os.path.isfile(train_filename) and os.path.isfile(val_filename) and os.path.isfile(test_filename)):
-        print("Computing PHT of a dataset, this can take several minutes...")
-        os.makedirs(f"./data/diagrams/{cfg.dataset_str}", exist_ok=True)
+    train_payload = _get_split("train", dataset_train, y_train, train_filename, legacy_train)
+    val_payload = _get_split("val", dataset_val, y_val, val_filename, legacy_val)
+    test_payload = _get_split("test", dataset_test, y_test, test_filename, legacy_test)
 
-        if not (os.path.isfile(train_filename) and os.path.isfile(val_filename)):
-            d_train, y_train = _compute_or_load_diagrams(dataset_train, y_train, train_filename, pht_apply)
-            print("Train complete")
-            d_val, y_val = _compute_or_load_diagrams(dataset_val, y_val, val_filename, pht_apply)
-            print("Val complete")
-        else:
-            d_train, y_train = pickle.load(open(train_filename, "rb"))
-            d_val, y_val = pickle.load(open(val_filename, "rb"))
-
-        if not os.path.isfile(test_filename):
-            d_test, y_test = _compute_or_load_diagrams(dataset_test, y_test, test_filename, pht_apply)
-            print("Test complete")
-        else:
-            d_test, y_test = pickle.load(open(test_filename, "rb"))
-    else:
-        d_train, y_train = pickle.load(open(train_filename, "rb"))
-        d_val, y_val = pickle.load(open(val_filename, "rb"))
-        d_test, y_test = pickle.load(open(test_filename, "rb"))
-
-    dataset_pht_train = PersistenceDataset(d_train, y_train, idx=cfg.idx, eps=cfg.eps)
-    dataset_pht_val = PersistenceDataset(d_val, y_val, idx=cfg.idx, eps=cfg.eps)
-    dataset_pht_test = PersistenceDataset(d_test, y_test, idx=cfg.idx, eps=cfg.eps)
+    dataset_pht_train = PersistenceDataset(train_payload["diagrams"], train_payload["labels"], schema=train_payload.get("schema", {}))
+    dataset_pht_val = PersistenceDataset(val_payload["diagrams"], val_payload["labels"], schema=val_payload.get("schema", {}))
+    dataset_pht_test = PersistenceDataset(test_payload["diagrams"], test_payload["labels"], schema=test_payload.get("schema", {}))
     return dataset_pht_train, dataset_pht_val, dataset_pht_test, meta

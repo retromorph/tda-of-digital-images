@@ -81,10 +81,20 @@ def _flops_per_sample(model, batch, with_mask=False):
         return 0
 
 
-def build_collate(task):
+def build_collate(task, idx=None, eps=None, sin_encoding_config=None):
     from src.datasets.types import collate_fn
 
-    return partial(collate_fn, task=task)
+    return partial(collate_fn, task=task, idx=idx, eps=eps, sin_encoding_config=sin_encoding_config)
+
+
+def select_dataset_output_by_input_kind(input_kind: str) -> str:
+    if input_kind == "flat":
+        return "1d"
+    return "2d"
+
+
+def select_forward_takes_mask(input_kind: str) -> bool:
+    return input_kind == "diagram"
 
 
 def build_mlflow_logger(args, method_name, task_name, model=None, sample_batch=None, forward_takes_mask=False):

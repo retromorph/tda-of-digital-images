@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.datasets import PersistenceDatasetConfig, get_persistence_dataset
+from src.encoders import create_encoder
 from src.experiment import (
     build_mlflow_logger,
     infer_output_dim,
@@ -22,7 +23,7 @@ from src.experiment import (
     seed_everything,
     update_runtime_metrics,
 )
-from src.fixed_encoders import EncodedFeatureDataset, PersistenceImageEncoder
+from src.fixed_encoders import EncodedFeatureDataset
 from src.models.persistence_cnn2d import PersistenceCNN2D
 from src.trainer import Trainer
 
@@ -74,7 +75,8 @@ dataset_train, dataset_val, dataset_test, meta = get_persistence_dataset(
         power=args.power,
     )
 )
-encoder = PersistenceImageEncoder(
+encoder = create_encoder(
+    "persistence_image",
     resolution=args.resolution,
     sigma2=args.sigma2,
     weighting=args.weighting,

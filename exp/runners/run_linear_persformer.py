@@ -88,7 +88,7 @@ dataset_train, dataset_val, dataset_test, meta = get_persistence_dataset(
     )
 )
 args.task = meta.task
-collate = build_collate(meta.task)
+collate = build_collate(meta.task, idx=args.idx, eps=args.eps)
 dataloader_train = make_dataloader(dataset_train, args.batch_size, shuffle=True, collate_fn=collate, num_workers=args.num_workers)
 dataloader_val = make_dataloader(dataset_val, args.batch_size, collate_fn=collate, num_workers=args.num_workers)
 dataloader_test = make_dataloader(dataset_test, args.batch_size, collate_fn=collate, num_workers=args.num_workers)
