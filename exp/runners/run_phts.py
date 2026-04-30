@@ -1,5 +1,3 @@
-import random
-import numpy as np
 import torch
 
 import warnings
@@ -14,12 +12,20 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.datasets import PersistenceDatasetConfig, collate_fn, get_persistence_dataset
-from src.logger import MLFlowLogger
+from src.datasets import PersistenceDatasetConfig, get_persistence_dataset
+from src.experiment import (
+    build_collate,
+    build_mlflow_logger,
+    infer_output_dim,
+    make_dataloader,
+    resolve_device,
+    safe_num_workers,
+    seed_everything,
+    update_runtime_metrics,
+)
 from src.models.deepsets import DeepSets
-from src.trainer import TrainerPersformer
-from src.utils import get_mlflow_tracking_uri
-from torch.utils.data import DataLoader
+from src.trainer import Trainer
+import time
 
 _DEFAULT_IDX = list(range(0, 16 + 1, 2))
 
@@ -54,22 +60,9 @@ group.add_argument("--experiment", help="Experiment name", default="Test")
 group.add_argument("--num_workers", type=int, help="DataLoader workers", default=0)
 
 args = parser.parse_args()
-if sys.platform == "darwin" and args.num_workers > 0:
-    print("macOS spawn safety: overriding num_workers {} -> 0".format(args.num_workers))
-    args.num_workers = 0
-
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-
-random.seed(args.seed)
-np.random.seed(args.seed)
-torch.manual_seed(args.seed)
-torch.cuda.manual_seed_all(args.seed)
-
-mlflow_url = get_mlflow_tracking_uri()
-mlflow_project = "{}_{}".format(args.project, args.experiment)
-
-device = torch.device(args.device)
+args.num_workers = safe_num_workers(args.num_workers)
+seed_everything(args.seed)
+device = resolve_device(args.device)
 
 dataset_train, dataset_val, dataset_test, meta = get_persistence_dataset(
     PersistenceDatasetConfig(
@@ -81,13 +74,13 @@ dataset_train, dataset_val, dataset_test, meta = get_persistence_dataset(
         power=args.power,
     )
 )
-dataloader_train = DataLoader(
-    dataset_train, args.batch_size, shuffle=True, collate_fn=collate_fn, num_workers=args.num_workers
-)
-dataloader_val = DataLoader(dataset_val, args.batch_size, collate_fn=collate_fn, num_workers=args.num_workers)
-dataloader_test = DataLoader(dataset_test, args.batch_size, collate_fn=collate_fn, num_workers=args.num_workers)
+args.task = meta.task
+collate = build_collate(meta.task)
+dataloader_train = make_dataloader(dataset_train, args.batch_size, shuffle=True, collate_fn=collate, num_workers=args.num_workers)
+dataloader_val = make_dataloader(dataset_val, args.batch_size, collate_fn=collate, num_workers=args.num_workers)
+dataloader_test = make_dataloader(dataset_test, args.batch_size, collate_fn=collate, num_workers=args.num_workers)
 
-model = DeepSets(9, meta.n_classes, args.d_model, args.d_hidden, args.dropout, args.activation, args.alpha)
+model = DeepSets(9, infer_output_dim(meta), args.d_model, args.d_hidden, args.dropout, args.activation, args.alpha)
 
 print(
     "Data:\t\t {}, idx=[{}], eps={}, transform={}, power={}".format(
@@ -101,8 +94,16 @@ print(
 )
 print("Optimization:\t lr={}, batch size={}, seed={}, device={}".format(args.lr, args.batch_size, args.seed, args.device))
 
-logger = MLFlowLogger(mlflow_url, mlflow_project, vars(args))
-trainer = TrainerPersformer(model, device, logger)
+logger = build_mlflow_logger(
+    args,
+    method_name=args.model,
+    task_name=args.dataset,
+    model=model,
+    sample_batch=next(iter(dataloader_train)),
+    forward_takes_mask=True,
+)
+trainer = Trainer(model, device, logger, task=meta.task, forward_takes_mask=True)
+started_at = time.time()
 trainer.fit(
     dataloader_train,
     dataloader_val,
@@ -110,4 +111,7 @@ trainer.fit(
     lr=args.lr,
     n_epochs=args.epochs,
     desc="{}, {}".format(args.model, args.seed),
+    close_logger=False,
 )
+update_runtime_metrics(logger, started_at, device)
+logger.end()

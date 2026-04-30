@@ -47,10 +47,12 @@ uv run python exp/pipelines/benchmark/aggregate_preliminary_results.py --config 
 
 ### MLflow
 
-По умолчанию раннеры пишут в локальное хранилище `file:./mlruns`. Чтобы указать свой сервер:
+По умолчанию раннеры пишут в локальный sqlite backend `sqlite:///mlruns/mlflow.db`.
+Артефакты раннов при этом хранятся в `mlruns/artifacts`.
+Чтобы использовать свой MLflow сервер без ручного `export`, создайте локальный `.env` из шаблона:
 
 ```sh
-export MLFLOW_TRACKING_URI=http://localhost:5000
+cp .env.example .env
 uv run python exp/runners/run_persformer.py --dataset MNIST --epochs 1
 ```
 
@@ -76,4 +78,14 @@ MLFLOW_EXPERIMENT_NAME=MyExperiment uv run python scripts/mlflow_summarize.py
 
 ## Модели
 
+```sh
+uv run mlflow server \
+  --backend-store-uri sqlite:///mlruns/mlflow.db \
+  --default-artifact-root file:./mlruns/artifacts \
+  --host 127.0.0.1 \
+  --port 5000
+```
 
+```sh
+sqlite3 mlruns/mlflow.db
+```

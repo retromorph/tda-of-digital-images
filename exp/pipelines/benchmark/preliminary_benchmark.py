@@ -14,6 +14,14 @@ import yaml
 ROOT = Path(__file__).resolve().parents[3]
 
 
+def expected_experiment_name(experiment_root, task, method_cfg, method_name):
+    method_label = method_cfg.get("args", {}).get("model", method_name)
+    return "{}/{}".format(
+        experiment_root,
+        task["name"],
+    ), str(method_label)
+
+
 def _to_cli_flag(k):
     return "--{}".format(str(k))
 
@@ -55,7 +63,7 @@ def build_cmd(cfg, task, method_name, method_cfg, seed):
         str(ROOT / "exp" / "runners" / method_cfg["runner"]),
     ]
 
-    experiment_name = "{}_{}".format(cfg["experiment"], task["name"])
+    experiment_name, _ = expected_experiment_name(cfg["experiment"], task, method_cfg, method_name)
     cmd.extend(["--experiment", experiment_name])
     cmd.extend(["--dataset", task["dataset"]])
     cmd.extend(["--seed", str(seed)])
@@ -85,7 +93,7 @@ def build_cmd(cfg, task, method_name, method_cfg, seed):
 
 
 def _log_manifest_to_mlflow(cfg, cfg_path, manifest, total, failures):
-    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns")
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "sqlite:///mlruns/mlflow.db")
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment("EXP_ARTIFACTS")
 

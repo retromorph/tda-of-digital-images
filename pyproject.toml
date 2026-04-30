@@ -28,6 +28,7 @@ dependencies = [
     "gudhi",
     "tqdm",
     "mlflow",
+    "fvcore",
     "pyyaml",
     "porespy",
     "medmnist>=3.0.2",

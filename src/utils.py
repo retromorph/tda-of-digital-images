@@ -4,11 +4,19 @@ import torch
 import torch.nn as nn
 
 from datetime import datetime
+try:
+   from dotenv import load_dotenv
+except Exception:  # pragma: no cover - optional at runtime
+   load_dotenv = None
+
+if load_dotenv is not None:
+   # Keep explicit shell env vars higher priority than .env values.
+   load_dotenv(override=False)
 
 
 def get_mlflow_tracking_uri() -> str:
-    """MLflow tracking URI: set ``MLFLOW_TRACKING_URI``; default local ``file:./mlruns``."""
-    return os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns")
+    """MLflow tracking URI from env/.env; default local ``sqlite:///mlruns/mlflow.db``."""
+    return os.environ.get("MLFLOW_TRACKING_URI", "sqlite:///mlruns/mlflow.db")
 
 
 def get_activation(activation_str, alpha=0.0):

@@ -3,19 +3,24 @@ import torch
 from torch.utils.data import Dataset
 
 
-def collate_fn(batch):
+def collate_fn(batch, task="classification"):
     n_batch = len(batch)
     d_lengths = [int(torch.argmax(diagram[:, 0])) for diagram, _ in batch]
 
     max_len = max(d_lengths)
     diagrams = torch.ones([n_batch, max_len, 9]) * 0.0
     masks = torch.zeros([n_batch, max_len]).bool()
-    labels = torch.zeros(n_batch).long()
+    labels = torch.zeros(n_batch)
 
     for i, (diagram, label) in enumerate(batch):
         diagrams[i][: d_lengths[i]] = diagram[: d_lengths[i]]
         masks[i][d_lengths[i] :] = True
         labels[i] = label
+
+    if task == "classification":
+        labels = labels.long()
+    else:
+        labels = labels.float()
 
     return diagrams, masks, labels
 

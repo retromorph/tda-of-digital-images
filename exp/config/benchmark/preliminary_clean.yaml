@@ -28,88 +28,88 @@ tasks:
   #   power: 0.0
 
 methods:
-  # persistent_image:
-  #   runner: run_persistence_image.py
-  #   project: FixedEncodersPI
-  #   run_filter: {}
-  #   args:
-  #     resolution: 28
-  #     sigma2: 1.0
-  #     weighting: linear
-  #     weight_power: 1.0
-  #     base_channels: 16
-  #     dropout: 0.1
-  #     lr: 0.0003
-  #     batch_size: 128
-  #     epochs: 40
+  persistent_image:
+    runner: run_persistence_image.py
+    project: FixedEncodersPI
+    run_filter: {}
+    args:
+      resolution: 28
+      sigma2: 1.0
+      weighting: linear
+      weight_power: 1.0
+      base_channels: 16
+      dropout: 0.1
+      lr: 0.0003
+      batch_size: 128
+      epochs: 2
 
-  # persistent_landscape:
-  #   runner: run_persistence_landscape.py
-  #   project: FixedEncodersPL
-  #   run_filter: {}
-  #   args:
-  #     num_layers: 5
-  #     resolution: 64
-  #     base_channels: 16
-  #     dropout: 0.1
-  #     lr: 0.0003
-  #     batch_size: 128
-  #     epochs: 40
+  persistent_landscape:
+    runner: run_persistence_landscape.py
+    project: FixedEncodersPL
+    run_filter: {}
+    args:
+      num_layers: 5
+      resolution: 64
+      base_channels: 16
+      dropout: 0.1
+      lr: 0.0003
+      batch_size: 128
+      epochs: 2
 
-  # persistent_silhouette:
-  #   runner: run_persistence_silhouette.py
-  #   project: FixedEncodersPS
-  #   run_filter: {}
-  #   args:
-  #     resolution: 64
-  #     weighting: linear
-  #     weight_power: 1.0
-  #     base_channels: 16
-  #     dropout: 0.1
-  #     lr: 0.0003
-  #     batch_size: 128
-  #     epochs: 40
+  persistent_silhouette:
+    runner: run_persistence_silhouette.py
+    project: FixedEncodersPS
+    run_filter: {}
+    args:
+      resolution: 64
+      weighting: linear
+      weight_power: 1.0
+      base_channels: 16
+      dropout: 0.1
+      lr: 0.0003
+      batch_size: 128
+      epochs: 2
 
-  # deepsets:
-  #   runner: run_phts.py
-  #   project: DeepSets
-  #   run_filter:
-  #     model: PHTS
-  #   args:
-  #     model: PHTS
-  #     d_model: 128
-  #     d_hidden: 192
-  #     dropout: 0.1
-  #     activation: GELU
-  #     alpha: 0.0
-  #     lr: 0.0001
-  #     batch_size: 128
-  #     epochs: 80
+  deepsets:
+    runner: run_phts.py
+    project: DeepSets
+    run_filter:
+      model: PHTS
+    args:
+      model: PHTS
+      d_model: 128
+      d_hidden: 192
+      dropout: 0.1
+      activation: GELU
+      alpha: 0.0
+      lr: 0.0001
+      batch_size: 128
+      epochs: 2
 
-  # persformer:
-  #   runner: run_persformer.py
-  #   run_filter:
-  #     model: PERSFORMER
-  #   args:
-  #     model: PERSFORMER
-  #     d_model: 96
-  #     d_hidden: 192
-  #     num_heads: 4
-  #     num_layers: 3
-  #     encoder_dropout: 0.1
-  #     decoder_dropout: 0.1
-  #     decoder_hidden_dims: "128,64"
-  #     pooling_heads: 4
-  #     norm: layer
-  #     activation: GELU
-  #     alpha: 0.0
-  #     norm_first: true
-  #     lr: 0.0005
-  #     weight_decay: 0.0001
-  #     warmup_epochs: 5
-  #     eta_min: 0.000001
-  #     batch_size: 64
-  #     epochs: 20
+  persformer:
+    runner: run_persformer.py
+    run_filter:
+      model: PERSFORMER
+    args:
+      model: PERSFORMER
+      d_model: 96
+      d_hidden: 192
+      num_heads: 4
+      num_layers: 3
+      encoder_dropout: 0.1
+      decoder_dropout: 0.1
+      decoder_hidden_dims: "128,64"
+      pooling_heads: 4
+      norm: layer
+      activation: GELU
+      alpha: 0.0
+      norm_first: true
+      lr: 0.0005
+      weight_decay: 0.0001
+      warmup_epochs: 5
+      eta_min: 0.000001
+      batch_size: 64
+      epochs: 2
 
   linear_persformer:
     runner: run_linear_persformer.py
@@ -132,30 +132,30 @@ methods:
       warmup_epochs: 5
       eta_min: 0.000001
       batch_size: 64
-      epochs: 80
+      epochs: 2
 
-  # latent_persformer:
-  #   runner: run_latent_persformer.py
-  #   run_filter:
-  #     model: LATENT_PERSFORMER
-  #   args:
-  #     model: LATENT_PERSFORMER
-  #     d_model: 96
-  #     d_latents: 128
-  #     num_latents: 64
-  #     num_blocks: 1
-  #     num_self_attends_per_block: 2
-  #     num_self_attention_heads: 4
-  #     num_cross_attention_heads: 4
-  #     cross_attention_widening_factor: 1
-  #     self_attention_widening_factor: 1
-  #     dropout: 0.1
-  #     decoder_dropout: 0.1
-  #     decoder_hidden_dims: "128,64"
-  #     activation: GELU
-  #     lr: 0.0005
-  #     weight_decay: 0.0001
-  #     warmup_epochs: 5
-  #     eta_min: 0.000001
-  #     batch_size: 64
-  #     epochs: 20
+  latent_persformer:
+    runner: run_latent_persformer.py
+    run_filter:
+      model: LATENT_PERSFORMER
+    args:
+      model: LATENT_PERSFORMER
+      d_model: 96
+      d_latents: 128
+      num_latents: 64
+      num_blocks: 1
+      num_self_attends_per_block: 2
+      num_self_attention_heads: 4
+      num_cross_attention_heads: 4
+      cross_attention_widening_factor: 1
+      self_attention_widening_factor: 1
+      dropout: 0.1
+      decoder_dropout: 0.1
+      decoder_hidden_dims: "128,64"
+      activation: GELU
+      lr: 0.0005
+      weight_decay: 0.0001
+      warmup_epochs: 5
+      eta_min: 0.000001
+      batch_size: 64
+      epochs: 2

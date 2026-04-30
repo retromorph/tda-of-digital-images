@@ -41,7 +41,11 @@ def resolve_config_path(path):
 
 
 def expected_experiment_name(root_name, task_name):
-    return "{}_{}".format(root_name, task_name)
+    return "{}/{}".format(root_name, task_name)
+
+
+def expected_method_name(method_name, method_cfg):
+    return str(method_cfg.get("args", {}).get("model", method_name))
 
 
 def gather_rows(cfg, metric_name):
@@ -51,11 +55,11 @@ def gather_rows(cfg, metric_name):
         exp_name = expected_experiment_name(cfg["experiment"], task_name)
 
         for method_name, method_cfg in cfg["methods"].items():
-            if "project" in method_cfg:
-                full_exp_name = "{}_{}".format(method_cfg["project"], exp_name)
-            else:
-                # Persformer-family scripts use hardcoded PERSFORMER_<experiment>
-                full_exp_name = "PERSFORMER_{}".format(exp_name)
+            full_exp_name = "{}/{}/{}".format(
+                exp_name,
+                task["dataset"],
+                expected_method_name(method_name, method_cfg),
+            )
 
             try:
                 runs = mlflow.search_runs(
@@ -167,7 +171,7 @@ def main():
     df = gather_rows(cfg, args.metric)
     per_task, leaderboard, raw = summarize(df)
 
-    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns")
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "sqlite:///mlruns/mlflow.db")
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(args.artifact_experiment)
 

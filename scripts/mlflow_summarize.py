@@ -6,7 +6,7 @@ import pandas as pd
 from mlflow.tracking import MlflowClient
 
 # Override with: MLFLOW_TRACKING_URI and MLFLOW_EXPERIMENT_NAME
-tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns")
+tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "sqlite:///mlruns/mlflow.db")
 experiment = os.environ.get("MLFLOW_EXPERIMENT_NAME", "PERSFORMER_Alpha_Main")
 
 client = MlflowClient(tracking_uri)

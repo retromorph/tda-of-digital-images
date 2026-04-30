@@ -1,9 +1,8 @@
 import argparse
-import random
 import sys
 from pathlib import Path
 
-import numpy as np
+import time
 import torch
 import warnings
 from torch.utils.data import DataLoader, Subset
@@ -15,11 +14,17 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.datasets import PersistenceDatasetConfig, get_persistence_dataset
+from src.experiment import (
+    build_mlflow_logger,
+    infer_output_dim,
+    resolve_device,
+    safe_num_workers,
+    seed_everything,
+    update_runtime_metrics,
+)
 from src.fixed_encoders import EncodedFeatureDataset, PersistenceSilhouetteEncoder
-from src.logger import MLFlowLogger
 from src.models.persistence_cnn1d import PersistenceCNN1D
 from src.trainer import Trainer
-from src.utils import get_mlflow_tracking_uri
 
 
 parser = argparse.ArgumentParser(
@@ -49,20 +54,9 @@ group.add_argument("--max_train", type=int, default=None)
 group.add_argument("--max_val", type=int, default=None)
 group.add_argument("--max_test", type=int, default=None)
 args = parser.parse_args()
-if sys.platform == "darwin" and args.num_workers > 0:
-    print("macOS spawn safety: overriding num_workers {} -> 0".format(args.num_workers))
-    args.num_workers = 0
-
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-random.seed(args.seed)
-np.random.seed(args.seed)
-torch.manual_seed(args.seed)
-torch.cuda.manual_seed_all(args.seed)
-
-mlflow_url = get_mlflow_tracking_uri()
-mlflow_project = "{}_{}".format(args.project, args.experiment)
-device = torch.device(args.device)
+args.num_workers = safe_num_workers(args.num_workers)
+seed_everything(args.seed)
+device = resolve_device(args.device)
 
 dataset_train, dataset_val, dataset_test, meta = get_persistence_dataset(
     PersistenceDatasetConfig(
@@ -105,7 +99,7 @@ dataloader_val = DataLoader(val_features, args.batch_size, num_workers=args.num_
 dataloader_test = DataLoader(test_features, args.batch_size, num_workers=args.num_workers)
 
 model = PersistenceCNN1D(
-    d_output=meta.n_classes,
+    d_output=infer_output_dim(meta),
     in_channels=1,
     base_channels=args.base_channels,
     dropout=args.dropout,
@@ -119,8 +113,10 @@ print(
 )
 print("Optimization:\t lr={}, batch size={}, seed={}, device={}".format(args.lr, args.batch_size, args.seed, args.device))
 
-logger = MLFlowLogger(mlflow_url, mlflow_project, vars(args))
-trainer = Trainer(model, device, logger)
+args.task = meta.task
+logger = build_mlflow_logger(args, method_name="PS", task_name=args.dataset, model=model)
+trainer = Trainer(model, device, logger, task=meta.task)
+started_at = time.time()
 trainer.fit(
     dataloader_train,
     dataloader_val,
@@ -128,4 +124,7 @@ trainer.fit(
     lr=args.lr,
     n_epochs=args.epochs,
     desc="PS-{}, {}".format(args.dataset, args.seed),
+    close_logger=False,
 )
+update_runtime_metrics(logger, started_at, device)
+logger.end()
