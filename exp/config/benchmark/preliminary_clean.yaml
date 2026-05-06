@@ -1,7 +1,6 @@
 experiment: PreliminaryTDA
 
-# seeds: [0, 1, 2]
-seeds: [0]
+seeds: [0, 1, 2]
 device: "mps"
 num_workers: 2
 
@@ -14,24 +13,21 @@ tasks:
     dataset: MNIST
     transform: null
     power: 0.0
-  # - name: kmnist_clean
-  #   dataset: KMNIST
-  #   transform: null
-  #   power: 0.0
-  # - name: fmnist_clean
-  #   dataset: FMNIST
-  #   transform: null
-  #   power: 0.0
-  # - name: emnistb_clean
-  #   dataset: EMNIST-B
-  #   transform: null
-  #   power: 0.0
+  - name: kmnist_clean
+    dataset: KMNIST
+    transform: null
+    power: 0.0
+  - name: fmnist_clean
+    dataset: FMNIST
+    transform: null
+    power: 0.0
+  - name: emnistb_clean
+    dataset: EMNIST-B
+    transform: null
+    power: 0.0
 
 methods:
   persistent_image:
-    runner: run_persistence_image.py
-    project: FixedEncodersPI
-    run_filter: {}
     args:
       resolution: 28
       sigma2: 1.0
@@ -41,12 +37,9 @@ methods:
       dropout: 0.1
       lr: 0.0003
       batch_size: 128
-      epochs: 2
+      epochs: 50
 
   persistent_landscape:
-    runner: run_persistence_landscape.py
-    project: FixedEncodersPL
-    run_filter: {}
     args:
       num_layers: 5
       resolution: 64
@@ -54,12 +47,9 @@ methods:
       dropout: 0.1
       lr: 0.0003
       batch_size: 128
-      epochs: 2
+      epochs: 50
 
   persistent_silhouette:
-    runner: run_persistence_silhouette.py
-    project: FixedEncodersPS
-    run_filter: {}
     args:
       resolution: 64
       weighting: linear
@@ -68,13 +58,9 @@ methods:
       dropout: 0.1
       lr: 0.0003
       batch_size: 128
-      epochs: 2
+      epochs: 50
 
   deepsets:
-    runner: run_phts.py
-    project: DeepSets
-    run_filter:
-      model: PHTS
     args:
       model: PHTS
       d_model: 128
@@ -84,12 +70,9 @@ methods:
       alpha: 0.0
       lr: 0.0001
       batch_size: 128
-      epochs: 2
+      epochs: 50
 
   persformer:
-    runner: run_persformer.py
-    run_filter:
-      model: PERSFORMER
     args:
       model: PERSFORMER
       d_model: 96
@@ -109,12 +92,9 @@ methods:
       warmup_epochs: 5
       eta_min: 0.000001
       batch_size: 64
-      epochs: 2
+      epochs: 50
 
   linear_persformer:
-    runner: run_linear_persformer.py
-    run_filter:
-      model: LINEAR_PERSFORMER
     args:
       model: LINEAR_PERSFORMER
       d_model: 96
@@ -132,12 +112,9 @@ methods:
       warmup_epochs: 5
       eta_min: 0.000001
       batch_size: 64
-      epochs: 2
+      epochs: 50
 
   latent_persformer:
-    runner: run_latent_persformer.py
-    run_filter:
-      model: LATENT_PERSFORMER
     args:
       model: LATENT_PERSFORMER
       d_model: 96
@@ -158,4 +135,4 @@ methods:
       warmup_epochs: 5
       eta_min: 0.000001
       batch_size: 64
-      epochs: 2
+      epochs: 50

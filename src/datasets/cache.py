@@ -5,7 +5,7 @@ import pickle
 from datetime import datetime, timezone
 
 
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 
 def _stable_json(value) -> str:
@@ -24,8 +24,23 @@ def cache_dir(dataset: str, cache_key: str) -> str:
     return os.path.join("data", "cache", "diagrams", dataset, cache_key)
 
 
-def split_cache_path(dataset: str, cache_key: str, split: str, seed: int) -> str:
-    return os.path.join(cache_dir(dataset, cache_key), f"{split}_seed-{seed}.pkl")
+def _transform_suffix(transform_str: str | None, power) -> str:
+    if transform_str is None:
+        return ""
+    return f"_t-{transform_str}-{power}"
+
+
+def split_cache_path(
+    dataset: str,
+    cache_key: str,
+    split: str,
+    seed: int,
+    *,
+    transform_str: str | None = None,
+    power=0.0,
+) -> str:
+    suffix = _transform_suffix(transform_str, power) if split == "test" else ""
+    return os.path.join(cache_dir(dataset, cache_key), f"{split}{suffix}_seed-{seed}.pkl")
 
 
 def meta_path(dataset: str, cache_key: str) -> str:

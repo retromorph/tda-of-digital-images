@@ -1,6 +1,6 @@
 # TDA of digital images
 
-Эксперименты с **Persistent Homology Transformer** (код модели в [`src/`](src/), сценарии обучения в [`exp/`](exp/)).
+Экспериментальное окружение для **Topological Data Analysis** в анализе изображений: сравнение моделей и фильтраций поверх Persistent Homology Transformer (`src/`), запуск/оркестрация экспериментов в `exp/`.
 
 ## Настройка окружения
 
@@ -17,66 +17,119 @@ uv sync --extra jupyter
 uv run jupyter notebook
 ```
 
-Запуск экспериментов (из корня репозитория):
+## Запуск одного эксперимента
+
+Единая точка входа — `runner.py` со структурированным YAML и dotlist-overrides.
 
 ```sh
-uv run python exp/runners/run_persformer.py --dataset MNIST --help
-uv run python exp/runners/run_latent_persformer.py --dataset MNIST --help
-uv run python exp/runners/run_linear_persformer.py --dataset MNIST --help
-uv run python exp/pipelines/legacy/main.py
-uv run python exp/pipelines/ablations/invariance.py   # augmentation sweep (see exp/config/ablations/invariance.yaml)
-uv run python exp/runners/run_persistence_image.py --dataset MNIST --epochs 1
-uv run python exp/runners/run_persistence_landscape.py --dataset MNIST --epochs 1
-uv run python exp/runners/run_persistence_silhouette.py --dataset MNIST --epochs 1
-uv run python exp/pipelines/smoke/fixed_encoders.py
-uv run python exp/pipelines/benchmark/preliminary_benchmark.py --config exp/config/benchmark/preliminary_clean.yaml --dry_run
-uv run python exp/pipelines/benchmark/aggregate_preliminary_results.py --config exp/config/benchmark/preliminary_clean.yaml
+# полный конфиг по умолчанию
+uv run python runner.py --config exp/config/unified/default.yaml
+
+# точечные оверрайды
+uv run python runner.py \
+  --config exp/config/unified/default.yaml \
+  --override seed=0 \
+  --override device=cpu \
+  --override dataset.name=MNIST \
+  --override model.name=MLP \
+  --override 'model.args={"d_hidden": 256, "num_layers": 2, "dropout": 0.1, "activation": "GELU", "alpha": 0.0}' \
+  --override training.budget.value=10 \
+  --override training.scheduler.name=warmup_cosine \
+  --override training.scheduler.warmup_epochs=2 \
+  --override training.early_stop.patience=5 \
+  --override logging.experiment=MyExperiment/mnist
 ```
 
-### Classical fixed encoders
+Полная схема конфигурации описана в `src/experiment/config.py` (`ExperimentConfig`).
+Главные секции:
 
-Добавлены фиксированные векторизации диаграмм в `src/fixed_encoders/`:
-- `PersistenceImage` (2D сетка), классификатор: небольшой `2D CNN`
-- `PersistenceLandscape` (k слоёв), классификатор: небольшой `1D CNN`
-- `PersistenceSilhouette` (1 кривая), классификатор: небольшой `1D CNN`
+- `dataset.{name, args, test_time}` — какой датасет и какие test-time трансформации применять
+- `filtration.{name, args, diagram_idx, positional_encoding}` — фильтрация PH (registry в `src/filtrations/`)
+- `encoder.{name, args}` — для моделей с input_kind=encoded (registry в `src/encoders/`)
+- `model.{name, args}` — модель из `src/models/base.py` (registry)
+- `training.{batch_size, optimizer, scheduler, budget, early_stop, grad_accum, max_grad_norm}`
+- `logging.{experiment, tags}`
 
-Режимы взвешивания для `PersistenceImage` и `PersistenceSilhouette`:
-- `none` — вес `1`
-- `linear` — вес `persistence`
-- `power` — вес `persistence ** weight_power`
+Старые скрипты `exp/runners/run_*.py` остаются как тонкие шимы поверх единого `runner.py` (см. `exp/runners/_shim.py`).
 
-### MLflow
+## Sweeps и benchmark
 
-По умолчанию раннеры пишут в локальный sqlite backend `sqlite:///mlruns/mlflow.db`.
-Артефакты раннов при этом хранятся в `mlruns/artifacts`.
-Чтобы использовать свой MLflow сервер без ручного `export`, создайте локальный `.env` из шаблона:
+Унифицированный оркестратор — `exp.pipelines.orchestrator`:
+
+```sh
+uv run python -m exp.pipelines.orchestrator \
+  --config exp/config/benchmark/preliminary_clean.yaml --dry_run
+
+uv run python -m exp.pipelines.orchestrator \
+  --config exp/config/benchmark/preliminary_clean.yaml
+
+# фильтр по методу/таску
+uv run python -m exp.pipelines.orchestrator \
+  --config exp/config/benchmark/preliminary_clean.yaml \
+  --only_method persformer --only_task mnist_clean
+```
+
+Быстрый smoke поверх той же логики:
+
+```sh
+uv run python -m exp.pipelines.orchestrator --config exp/config/smoke/preliminary_quick.yaml
+uv run python -m exp.pipelines.smoke.fixed_encoders
+```
+
+Отдельные пайплайны для аблейшнов перенесены на тот же оркестратор:
+
+```sh
+uv run python -m exp.pipelines.legacy.main
+uv run python -m exp.pipelines.ablations.invariance
+uv run python -m exp.pipelines.ablations.n_filters
+uv run python -m exp.pipelines.ablations.directions
+```
+
+Каждый sweep также пишет в MLflow артефакт-манифест (`orchestrator_manifest.json`) с историей вызванных команд.
+
+## Кэш диаграмм
+
+Диаграммы фильтраций кешируются по стабильному хешу пары `(filtration_name, filtration_params)`:
+
+- `data/cache/diagrams/<dataset>/<cache_key>/{train,val,test[_t-<transform>-<power>]}_seed-<n>.pkl`
+- test-сплит дополнительно учитывает `transform_str` и `power`, чтобы invariance-эксперименты не подсунули чистые диаграммы для зашумлённых картинок
+- payload содержит `version` (`CACHE_VERSION`) для будущих миграций
+
+## Classical fixed encoders
+
+Векторизации диаграмм в `src/fixed_encoders/`:
+- `PersistenceImage` (2D сетка) → `PERSISTENCE_CNN2D`
+- `PersistenceLandscape` (k слоёв) → `PERSISTENCE_CNN1D`
+- `PersistenceSilhouette` (1 кривая) → `PERSISTENCE_CNN1D`
+
+Закодированные фичи также кэшируются на диск (`src/fixed_encoders/feature_dataset.py`) с версионированием по содержимому энкодера.
+
+## Trainer
+
+`src/trainer.py` — единый трейнер для классификации и регрессии. Управление полностью через `OptimConfig` + `TrainConfig`:
+
+- AdamW + опциональные `cosine` / `warmup_cosine`
+- gradient accumulation (`train_config.grad_accum`)
+- gradient clipping (`train_config.max_grad_norm > 0`)
+- early stopping по `loss_val` (`train_config.early_stop_patience`, `early_stop_min_delta`)
+- per-epoch логирование `loss_*`, `acc_*` / `rmse_*`/`mae`/`r2`, `lr` и `loss_test_at_*_best`
+
+## MLflow
+
+По умолчанию раннеры пишут в локальный sqlite backend `sqlite:///mlruns/mlflow.db`. Артефакты раннов хранятся в `mlruns/artifacts`. Чтобы использовать свой MLflow сервер без ручного `export`, создайте локальный `.env` из шаблона:
 
 ```sh
 cp .env.example .env
-uv run python exp/runners/run_persformer.py --dataset MNIST --epochs 1
+uv run python runner.py --config exp/config/unified/default.yaml --override training.budget.value=1
 ```
 
-Сводка по эксперименту (имя эксперимента можно задать через `MLFLOW_EXPERIMENT_NAME`):
+Сводка по эксперименту:
 
 ```sh
 MLFLOW_EXPERIMENT_NAME=MyExperiment uv run python scripts/mlflow_summarize.py
 ```
 
-Оркестратор `preliminary_benchmark.py` и отчёт `aggregate_preliminary_results.py` логируют runtime-артефакты (manifest/CSV) напрямую в MLflow artifacts.
-
-### PyTorch: CPU и CUDA
-
-По умолчанию `uv sync` подтягивает **CPU**-сборки `torch` с PyPI. Для **CUDA** задайте подходящий индекс PyTorch в проекте (см. [документацию PyTorch](https://pytorch.org/get-started/locally/) и [uv: indexes](https://docs.astral.sh/uv/concepts/projects/dependencies/#index-urls)) и переустановите зависимости.
-
-## Датасеты
-
-2019 CoREMOF https://mof.tech.northwestern.edu/databases
-
-2025 CoREMOF https://zenodo.org/records/15621349
-
-2D-porous-media-images-main https://github.com/gengshaoyang/2D-porous-media-images?utm_source=chatgpt.com
-
-## Модели
+Локальный UI:
 
 ```sh
 uv run mlflow server \
@@ -86,6 +139,13 @@ uv run mlflow server \
   --port 5000
 ```
 
-```sh
-sqlite3 mlruns/mlflow.db
-```
+## PyTorch: CPU и CUDA
+
+По умолчанию `uv sync` подтягивает CPU-сборки `torch`. Для CUDA задайте подходящий индекс PyTorch в проекте (см. [документацию PyTorch](https://pytorch.org/get-started/locally/) и [uv: indexes](https://docs.astral.sh/uv/concepts/projects/dependencies/#index-urls)) и переустановите зависимости.
+
+## Датасеты
+
+- 2019 CoREMOF — https://mof.tech.northwestern.edu/databases
+- 2025 CoREMOF — https://zenodo.org/records/15621349
+- 2D-porous-media-images — https://github.com/gengshaoyang/2D-porous-media-images
+- MedMNIST / Torchvision MNIST family / NIST SD04 — собираются по `src/datasets/sources/*.py`

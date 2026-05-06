@@ -4,26 +4,24 @@ seeds: [4]
 batch_size: 128
 lr: 0.0003
 epochs: 1
-device: "mps"
+device: "cpu"
 num_workers: 0
-max_train: 2048
-max_val: 512
-max_test: 512
+
+# `max_train`/`max_val`/`max_test` from the legacy smoke script are dropped here:
+# the unified runner does not support dataset subset truncation yet. Keep
+# `epochs: 1` and pick a small dataset (MNIST is fine) for a fast smoke pass.
 
 persistence_image:
-  runner: run_persistence_image.py
   resolution: [28]
   sigma2: [1.0]
   weighting: [linear]
   weight_power: [1.0]
 
 persistence_landscape:
-  runner: run_persistence_landscape.py
   num_layers: [5]
   resolution: [100]
 
 persistence_silhouette:
-  runner: run_persistence_silhouette.py
   resolution: [100]
   weighting: [linear]
   weight_power: [1.0]

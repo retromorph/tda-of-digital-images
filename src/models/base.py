@@ -44,11 +44,15 @@ def _build_mlp(meta, **cfg):
 @_register("ResNet", input_kind="image")
 def _build_resnet(meta, **cfg):
     in_channels = 3 if meta.color == "rgb" else 1
+    if "d_hidden" in cfg and "out_channels" not in cfg:
+        cfg["out_channels"] = cfg.pop("d_hidden")
     return ResNet(in_channels=in_channels, d_output=1 if meta.task == "regression" else meta.n_classes, **cfg)
 
 
 @_register("ViT", input_kind="image")
 def _build_vit(meta, **cfg):
+    if "d_hidden" in cfg and "d_ff" not in cfg:
+        cfg["d_ff"] = cfg.pop("d_hidden")
     return ViT(meta.dim, 1 if meta.task == "regression" else meta.n_classes, **cfg)
 
 

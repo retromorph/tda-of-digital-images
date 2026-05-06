@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from statistics import fmean
 
 import torch
@@ -13,9 +13,9 @@ class OptimConfig:
     optimizer: str = "adamw"
     lr: float = 1e-3
     weight_decay: float = 0.0
-    scheduler: str = "none"  # none|cosine|warmup_cosine
+    scheduler: str = "none"  # none | cosine | warmup_cosine
     warmup_epochs: int = 0
-    eta_min: float = 0.0  # ratio: min_lr / peak_lr
+    eta_min: float = 0.0  # ratio min_lr / peak_lr
 
 
 @dataclass
@@ -25,9 +25,18 @@ class TrainConfig:
     grad_accum: int = 1
     max_grad_norm: float = 0.0
     early_stop_patience: int = 0
+    early_stop_metric: str = "loss_val"
+    early_stop_min_delta: float = 0.0
 
 
 class Trainer:
+    """Single training loop driven entirely by `OptimConfig` + `TrainConfig`.
+
+    Supports classification (CE + accuracy) and regression (MSE + RMSE/MAE/R^2),
+    AdamW with optional warmup+cosine schedule, gradient accumulation, gradient
+    clipping, and val-loss based early stopping.
+    """
+
     def __init__(self, model, device, logger, task="classification", forward_takes_mask=False):
         self.model = model
         self.device = device
@@ -45,8 +54,10 @@ class Trainer:
             "lr": [],
         }
         self.loss_fn = self._build_loss_fn(task)
+        self.optimizer = None
 
-    def _build_loss_fn(self, task):
+    @staticmethod
+    def _build_loss_fn(task):
         if task == "regression":
             return torch.nn.MSELoss()
         return torch.nn.CrossEntropyLoss()
@@ -63,13 +74,15 @@ class Trainer:
             return self.model(x, mask)
         return self.model(x)
 
-    def _prepare_regression_targets(self, y_hat, y):
+    @staticmethod
+    def _prepare_regression_targets(y_hat, y):
         y = y.float().view(y_hat.shape[0], -1)
         if y_hat.ndim == 1:
             y_hat = y_hat.unsqueeze(-1)
         return y_hat, y
 
-    def _classification_metrics(self, y_hat, y):
+    @staticmethod
+    def _classification_metrics(y_hat, y):
         return {"acc": float(multiclass_accuracy(y_hat, y).detach().cpu().item())}
 
     def _regression_metrics(self, y_hat, y):
@@ -88,20 +101,31 @@ class Trainer:
             "r2": float(r2.detach().cpu().item()),
         }
 
-    def _train_step(self, dataloader, stage):
+    def _train_step(self, dataloader, train_cfg: TrainConfig, stage):
         loss_batches = []
-        for batch in dataloader:
+        accum = max(1, int(train_cfg.grad_accum))
+        max_norm = float(train_cfg.max_grad_norm)
+        self.optimizer.zero_grad(set_to_none=True)
+        for step_idx, batch in enumerate(dataloader):
             x, mask, y = self._unpack_batch(batch)
             y_hat = self._forward(x, mask)
             if self.task == "regression":
                 y_hat, y = self._prepare_regression_targets(y_hat, y)
-            loss_batch = self.loss_fn(y_hat, y)
-
-            loss_batch.backward()
+            loss = self.loss_fn(y_hat, y)
+            (loss / accum).backward()
+            if (step_idx + 1) % accum == 0:
+                if max_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
+                self.optimizer.step()
+                self.optimizer.zero_grad(set_to_none=True)
+            loss_batches.append(float(loss.detach().cpu().item()))
+        # flush leftover grads if dataset doesn't divide evenly
+        if (len(loss_batches) % accum) != 0:
+            if max_norm > 0:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
             self.optimizer.step()
-            self.optimizer.zero_grad()
-            loss_batches.append(float(loss_batch.detach().cpu().item()))
-        self.history[stage].append(fmean(loss_batches))
+            self.optimizer.zero_grad(set_to_none=True)
+        self.history[stage].append(fmean(loss_batches) if loss_batches else float("nan"))
 
     def _eval_step(self, dataloader, stage):
         loss_batches = []
@@ -112,8 +136,8 @@ class Trainer:
                 y_hat = self._forward(x, mask)
                 if self.task == "regression":
                     y_hat, y = self._prepare_regression_targets(y_hat, y)
-                loss_batch = self.loss_fn(y_hat, y)
-                loss_batches.append(float(loss_batch.detach().cpu().item()))
+                loss = self.loss_fn(y_hat, y)
+                loss_batches.append(float(loss.detach().cpu().item()))
 
                 if stage == "test":
                     if self.task == "regression":
@@ -121,7 +145,7 @@ class Trainer:
                     else:
                         metrics_batches.append(self._classification_metrics(y_hat, y))
 
-        self.history[stage].append(fmean(loss_batches))
+        self.history[stage].append(fmean(loss_batches) if loss_batches else float("nan"))
         if stage == "test":
             if self.task == "regression":
                 for key in ("rmse", "mae", "r2"):
@@ -131,7 +155,7 @@ class Trainer:
 
     def _build_optimizer(self, cfg: OptimConfig):
         if cfg.optimizer.lower() != "adamw":
-            raise ValueError("Only AdamW optimizer is supported in Phase 1.")
+            raise ValueError("Only AdamW optimizer is supported (got '{}').".format(cfg.optimizer))
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
 
     def _build_scheduler(self, cfg: OptimConfig, n_epochs: int):
@@ -252,29 +276,11 @@ class Trainer:
         dataloader_train,
         dataloader_val,
         dataloader_test,
-        lr,
-        n_epochs=10,
-        desc=None,
         *,
-        weight_decay=0.0,
-        warmup_epochs=0,
-        eta_min=0.0,
-        scheduler="none",
-        optim_config=None,
-        train_config=None,
-        close_logger=True,
+        optim_config: OptimConfig,
+        train_config: TrainConfig,
+        desc: str | None = None,
     ):
-        if optim_config is None:
-            optim_config = OptimConfig(
-                lr=lr,
-                weight_decay=weight_decay,
-                warmup_epochs=warmup_epochs,
-                eta_min=eta_min,
-                scheduler=scheduler,
-            )
-        if train_config is None:
-            train_config = TrainConfig(epochs=n_epochs)
-
         self._build_optimizer(optim_config)
         self.model.to(self.device)
         scheduler_obj = self._build_scheduler(optim_config, train_config.epochs)
@@ -284,29 +290,46 @@ class Trainer:
             for pg in self.optimizer.param_groups:
                 pg["lr"] = initial_lr
 
+        early_stop_patience = int(max(0, train_config.early_stop_patience))
+        early_stop_min_delta = float(max(0.0, train_config.early_stop_min_delta))
+        best_val = float("inf")
+        bad_epochs = 0
+        stopped_early = False
+
         pbar = tqdm(range(train_config.epochs), desc=desc, bar_format="{desc:<11.11}{percentage:3.0f}%|{bar:3}{r_bar}")
         for epoch_idx in pbar:
             self.model.train()
-            self._train_step(dataloader_train, stage="train")
+            self._train_step(dataloader_train, train_config, stage="train")
             self.model.eval()
             self._eval_step(dataloader_val, stage="val")
             self._eval_step(dataloader_test, stage="test")
 
             if scheduler_obj is not None:
                 scheduler_obj.step()
-                current_lr = float(self.optimizer.param_groups[0]["lr"])
-            else:
-                current_lr = float(self.optimizer.param_groups[0]["lr"])
+            current_lr = float(self.optimizer.param_groups[0]["lr"])
             self.history["lr"].append(current_lr)
             pbar.set_postfix_str(self._postfix(epoch_idx, current_lr if scheduler_obj is not None else None))
 
             if self.logger is not None:
-                self.logger.log(self._build_log_metrics(epoch_idx, current_lr if scheduler_obj is not None else None), epoch_idx)
+                self.logger.log(
+                    self._build_log_metrics(epoch_idx, current_lr if scheduler_obj is not None else None),
+                    epoch_idx,
+                )
 
-        if self.logger is not None and close_logger:
-            self.logger.end()
+            if early_stop_patience > 0:
+                val_now = self.history["val"][epoch_idx]
+                if val_now + early_stop_min_delta < best_val:
+                    best_val = val_now
+                    bad_epochs = 0
+                else:
+                    bad_epochs += 1
+                    if bad_epochs >= early_stop_patience:
+                        stopped_early = True
+                        pbar.set_postfix_str(self._postfix(epoch_idx, current_lr) + " | early-stop")
+                        break
 
-
-class TrainerPersformer(Trainer):
-    def __init__(self, model, device, logger, task="classification"):
-        super().__init__(model=model, device=device, logger=logger, task=task, forward_takes_mask=True)
+        return {
+            "history": self.history,
+            "stopped_early": stopped_early,
+            "epochs_completed": len(self.history["train"]),
+        }

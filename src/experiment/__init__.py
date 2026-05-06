@@ -11,6 +11,8 @@ from src.experiment.bootstrap import (
     select_forward_takes_mask,
     update_runtime_metrics,
 )
+from src.experiment.config import load_config
+from src.experiment.runner import run_experiment
 
 __all__ = [
     "build_collate",
@@ -24,4 +26,6 @@ __all__ = [
     "select_dataset_output_by_input_kind",
     "select_forward_takes_mask",
     "update_runtime_metrics",
+    "load_config",
+    "run_experiment",
 ]

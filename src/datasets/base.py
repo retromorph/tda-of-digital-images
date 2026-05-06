@@ -8,6 +8,7 @@ class DatasetMeta:
     color: str
     image_size: tuple[int, int]
     target_stats: dict | None = None
+    label_offset: int = 0
 
     @property
     def dim(self) -> int:

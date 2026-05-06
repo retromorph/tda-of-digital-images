@@ -51,10 +51,11 @@ def emnist_b_loader():
 
 @DATASETS("EMNIST-L")
 def emnist_l_loader():
+    # EMNIST 'letters' uses 1-indexed labels (1..26); shift to 0..25 via label_offset.
     return _build_loader(
         lambda: EMNIST(root="./data/image", split="letters", train=True, download=True),
         lambda: EMNIST(root="./data/image", split="letters", train=False, download=True),
-        DatasetMeta(task="classification", n_classes=26, color="gray", image_size=(28, 28)),
+        DatasetMeta(task="classification", n_classes=26, color="gray", image_size=(28, 28), label_offset=-1),
     )
 
 

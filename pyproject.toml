@@ -32,6 +32,7 @@ dependencies = [
     "pyyaml",
     "porespy",
     "medmnist>=3.0.2",
+    "omegaconf",
 ]
 
 [project.optional-dependencies]

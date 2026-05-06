@@ -9,8 +9,8 @@ import torch.nn.functional as F
 
 from tqdm import tqdm
 
-from src.datasets.registry import get_dataset_cfg
 from src.datasets.cache import (
+    CACHE_VERSION,
     load_cache,
     save_cache,
     split_cache_path,
@@ -20,7 +20,7 @@ from src.datasets.cache import (
 from src.datasets.transforms import build_image_transforms
 from src.datasets.types import ImageDataset, PersistenceDataset
 from src.filtrations import FILTRATIONS  # noqa: F401
-from src.registry import FILTRATIONS
+from src.registry import DATASETS, FILTRATIONS
 
 
 @dataclass(frozen=True)
@@ -58,10 +58,11 @@ def _validate_fractions(fractions):
     return f_train, f_val
 
 
-def _normalize_emnist_letters_labels(labels, dataset_str):
-    if dataset_str == "EMNIST-L":
-        return labels - 1
-    return labels
+def _apply_label_offset(labels, meta):
+    offset = int(getattr(meta, "label_offset", 0) or 0)
+    if offset == 0:
+        return labels
+    return labels + offset
 
 
 def _get_targets_tensor(dataset):
@@ -112,7 +113,7 @@ def _prepare_images(raw_images, meta):
     return images
 
 
-def _compute_diagrams(dataset, labels, filtration_apply):
+def _compute_diagrams(dataset, filtration_apply):
     diagrams = []
     schema = None
     for item in tqdm(dataset.data):
@@ -120,7 +121,7 @@ def _compute_diagrams(dataset, labels, filtration_apply):
         diagrams.append(out.points)
         if schema is None:
             schema = out.schema
-    return diagrams, labels, (schema or {})
+    return diagrams, (schema or {})
 
 
 def _load_legacy_cache(path):
@@ -146,8 +147,8 @@ def get_image_dataset(cfg: ImageDatasetConfig):
     f_train, _f_val = _validate_fractions(cfg.fractions)
     transform_train_val, transform_test = build_image_transforms(cfg.transform_str, cfg.power, cfg.output)
 
-    dataset_cfg = get_dataset_cfg(cfg.dataset_str)
-    dataset_train_val_raw, dataset_test_raw, meta = dataset_cfg["dataset_loader"](cfg.seed, cfg.fractions)
+    loader = DATASETS.get(cfg.dataset_str)()
+    dataset_train_val_raw, dataset_test_raw, meta = loader(cfg.seed, cfg.fractions)
 
     n_train = int(len(dataset_train_val_raw) * f_train)
     random_idx = torch.randperm(len(dataset_train_val_raw), generator=torch.Generator().manual_seed(cfg.seed))
@@ -158,11 +159,11 @@ def get_image_dataset(cfg: ImageDatasetConfig):
     test_targets = _get_targets_tensor(dataset_test_raw)
 
     x_train = transform_train_val(train_val_images[random_idx[:n_train]])
-    y_train = _normalize_emnist_letters_labels(train_val_targets[random_idx[:n_train]], cfg.dataset_str)
+    y_train = _apply_label_offset(train_val_targets[random_idx[:n_train]], meta)
     x_val = transform_train_val(train_val_images[random_idx[n_train:]])
-    y_val = _normalize_emnist_letters_labels(train_val_targets[random_idx[n_train:]], cfg.dataset_str)
+    y_val = _apply_label_offset(train_val_targets[random_idx[n_train:]], meta)
     x_test = transform_test(test_images)
-    y_test = _normalize_emnist_letters_labels(test_targets, cfg.dataset_str)
+    y_test = _apply_label_offset(test_targets, meta)
 
     if getattr(meta, "task", "classification") == "classification":
         y_train = y_train.long()
@@ -194,7 +195,14 @@ def get_persistence_dataset(cfg: PersistenceDatasetConfig):
     cache_key = stable_hash(cfg.filtration, filt_params)
     train_filename = split_cache_path(cfg.dataset_str, cache_key, "train", cfg.seed)
     val_filename = split_cache_path(cfg.dataset_str, cache_key, "val", cfg.seed)
-    test_filename = split_cache_path(cfg.dataset_str, cache_key, "test", cfg.seed)
+    test_filename = split_cache_path(
+        cfg.dataset_str,
+        cache_key,
+        "test",
+        cfg.seed,
+        transform_str=cfg.transform_str,
+        power=cfg.power,
+    )
 
     filtration_apply = FILTRATIONS.get(cfg.filtration)(filt_params)
     transform_prefix = f"{cfg.transform_str}-{cfg.power}_" if cfg.transform_str is not None else ""
@@ -203,7 +211,7 @@ def get_persistence_dataset(cfg: PersistenceDatasetConfig):
     legacy_val = f"./data/diagrams/{cfg.dataset_str}/{cfg.dataset_str}_val_{suffix}.pkl"
     legacy_test = f"./data/diagrams/{cfg.dataset_str}/{cfg.dataset_str}_test_{transform_prefix}{suffix}.pkl"
 
-    def _get_split(split_name, ds, ys, path, legacy_path):
+    def _get_split(split_name, ds, path, legacy_path):
         payload = load_cache(path)
         if payload is not None:
             return payload
@@ -212,8 +220,14 @@ def get_persistence_dataset(cfg: PersistenceDatasetConfig):
             if legacy is not None:
                 return legacy
         print(f"Computing filtration for {split_name}, this can take several minutes...")
-        dgm, labels, schema = _compute_diagrams(ds, ys, filtration_apply)
-        payload = {"diagrams": dgm, "labels": labels, "schema": schema}
+        dgm, schema = _compute_diagrams(ds, filtration_apply)
+        labels = ds.targets
+        payload = {
+            "diagrams": dgm,
+            "labels": labels,
+            "schema": schema,
+            "version": CACHE_VERSION,
+        }
         save_cache(path, payload)
         write_meta(
             dataset=cfg.dataset_str,
@@ -224,9 +238,9 @@ def get_persistence_dataset(cfg: PersistenceDatasetConfig):
         )
         return payload
 
-    train_payload = _get_split("train", dataset_train, y_train, train_filename, legacy_train)
-    val_payload = _get_split("val", dataset_val, y_val, val_filename, legacy_val)
-    test_payload = _get_split("test", dataset_test, y_test, test_filename, legacy_test)
+    train_payload = _get_split("train", dataset_train, train_filename, legacy_train)
+    val_payload = _get_split("val", dataset_val, val_filename, legacy_val)
+    test_payload = _get_split("test", dataset_test, test_filename, legacy_test)
 
     dataset_pht_train = PersistenceDataset(train_payload["diagrams"], train_payload["labels"], schema=train_payload.get("schema", {}))
     dataset_pht_val = PersistenceDataset(val_payload["diagrams"], val_payload["labels"], schema=val_payload.get("schema", {}))

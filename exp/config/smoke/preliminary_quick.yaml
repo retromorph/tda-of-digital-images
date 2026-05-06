@@ -1,0 +1,83 @@
+experiment: PreliminaryTDA_quick
+
+seeds: [0]
+device: "cpu"
+num_workers: 0
+
+common_persistence:
+  idx: [0, 2, 4, 6, 7, 9, 11, 13, 16]
+  eps: 0.02
+
+tasks:
+  - name: mnist_clean
+    dataset: MNIST
+    transform: null
+    power: 0.0
+
+methods:
+  persistent_image:
+    args:
+      resolution: 28
+      sigma2: 1.0
+      weighting: linear
+      weight_power: 1.0
+      base_channels: 16
+      dropout: 0.1
+      lr: 0.0003
+      batch_size: 128
+      epochs: 2
+
+  persistent_landscape:
+    args:
+      num_layers: 5
+      resolution: 64
+      base_channels: 16
+      dropout: 0.1
+      lr: 0.0003
+      batch_size: 128
+      epochs: 2
+
+  persistent_silhouette:
+    args:
+      resolution: 64
+      weighting: linear
+      weight_power: 1.0
+      base_channels: 16
+      dropout: 0.1
+      lr: 0.0003
+      batch_size: 128
+      epochs: 2
+
+  deepsets:
+    args:
+      model: PHTS
+      d_model: 64
+      d_hidden: 64
+      dropout: 0.1
+      activation: GELU
+      alpha: 0.0
+      lr: 0.0001
+      batch_size: 128
+      epochs: 2
+
+  persformer:
+    args:
+      model: PERSFORMER
+      d_model: 64
+      d_hidden: 64
+      num_heads: 4
+      num_layers: 2
+      encoder_dropout: 0.1
+      decoder_dropout: 0.1
+      decoder_hidden_dims: "64,32"
+      pooling_heads: 2
+      norm: layer
+      activation: GELU
+      alpha: 0.0
+      norm_first: true
+      lr: 0.0005
+      weight_decay: 0.0001
+      warmup_epochs: 1
+      eta_min: 0.000001
+      batch_size: 64
+      epochs: 2

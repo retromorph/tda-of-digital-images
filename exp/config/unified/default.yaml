@@ -1,0 +1,47 @@
+run_name: ${dataset.name}_${model.name}_${seed}
+seed: 0
+device: cpu
+num_workers: 0
+
+dataset:
+  name: MNIST
+  args:
+    fractions: [0.8333333333, 0.1666666667]
+  test_time:
+    transform: null
+    power: 0.0
+
+filtration:
+  name: pht_directional
+  args:
+    eps: 0.02
+  diagram_idx: [0, 2, 4, 6, 7, 9, 11, 13, 16]
+  positional_encoding: sin5
+
+encoder: null
+
+model:
+  name: PHTS
+  args: {}
+
+training:
+  batch_size: 128
+  optimizer:
+    name: adamw
+    lr: 0.001
+    weight_decay: 0.0
+  scheduler:
+    name: none
+    warmup_epochs: 0
+    eta_min: 0.0
+  budget:
+    kind: epochs
+    value: 10
+  early_stop:
+    metric: loss_val
+    patience: 0
+    min_delta: 0.0
+
+logging:
+  experiment: Test/default
+  tags: {}
