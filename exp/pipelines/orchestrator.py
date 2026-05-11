@@ -55,7 +55,6 @@ def _resolve_cfg_path(cfg_path: Path) -> Path:
         ROOT / "exp" / "config" / "benchmark" / cfg_path.name,
         ROOT / "exp" / "config" / "ablations" / cfg_path.name,
         ROOT / "exp" / "config" / "smoke" / cfg_path.name,
-        ROOT / "exp" / "config" / "legacy" / cfg_path.name,
         ROOT / "exp" / "config" / cfg_path.name,
     ]
     for candidate in candidates:

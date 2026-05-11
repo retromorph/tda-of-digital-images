@@ -15,7 +15,6 @@ tasks:
 
 methods:
   persformer:
-    runner: run_persformer.py
     args:
       model: PERSFORMER
       d_model: 64
@@ -37,7 +36,6 @@ methods:
       epochs: 1
 
   resnet:
-    runner: run_resnet.py
     args:
       model: ResNet
       d_hidden: 16
@@ -46,7 +44,6 @@ methods:
       epochs: 1
 
   persistent_image:
-    runner: run_persistence_image.py
     args:
       resolution: 16
       sigma2: 1.0

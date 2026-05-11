@@ -50,8 +50,6 @@ uv run python runner.py \
 - `training.{batch_size, optimizer, scheduler, budget, early_stop, grad_accum, max_grad_norm}`
 - `logging.{experiment, tags}`
 
-Старые скрипты `exp/runners/run_*.py` остаются как тонкие шимы поверх единого `runner.py` (см. `exp/runners/_shim.py`).
-
 ## Sweeps и benchmark
 
 Унифицированный оркестратор — `exp.pipelines.orchestrator`:
@@ -73,13 +71,11 @@ uv run python -m exp.pipelines.orchestrator \
 
 ```sh
 uv run python -m exp.pipelines.orchestrator --config exp/config/smoke/preliminary_quick.yaml
-uv run python -m exp.pipelines.smoke.fixed_encoders
 ```
 
 Отдельные пайплайны для аблейшнов перенесены на тот же оркестратор:
 
 ```sh
-uv run python -m exp.pipelines.legacy.main
 uv run python -m exp.pipelines.ablations.invariance
 uv run python -m exp.pipelines.ablations.n_filters
 uv run python -m exp.pipelines.ablations.directions
@@ -121,12 +117,6 @@ uv run python -m exp.pipelines.ablations.directions
 ```sh
 cp .env.example .env
 uv run python runner.py --config exp/config/unified/default.yaml --override training.budget.value=1
-```
-
-Сводка по эксперименту:
-
-```sh
-MLFLOW_EXPERIMENT_NAME=MyExperiment uv run python scripts/mlflow_summarize.py
 ```
 
 Локальный UI:

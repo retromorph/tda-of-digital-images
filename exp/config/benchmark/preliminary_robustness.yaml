@@ -36,9 +36,6 @@ tasks:
 
 methods:
   persistent_image:
-    runner: run_persistence_image.py
-    project: FixedEncodersPI
-    run_filter: {}
     args:
       resolution: 28
       sigma2: 1.0
@@ -51,9 +48,6 @@ methods:
       epochs: 40
 
   persistent_landscape:
-    runner: run_persistence_landscape.py
-    project: FixedEncodersPL
-    run_filter: {}
     args:
       num_layers: 5
       resolution: 64
@@ -64,9 +58,6 @@ methods:
       epochs: 40
 
   persistent_silhouette:
-    runner: run_persistence_silhouette.py
-    project: FixedEncodersPS
-    run_filter: {}
     args:
       resolution: 64
       weighting: linear
@@ -78,10 +69,6 @@ methods:
       epochs: 40
 
   deepsets:
-    runner: run_phts.py
-    project: DeepSets
-    run_filter:
-      model: PHTS
     args:
       model: PHTS
       d_model: 128
@@ -94,9 +81,6 @@ methods:
       epochs: 80
 
   persformer:
-    runner: run_persformer.py
-    run_filter:
-      model: PERSFORMER
     args:
       model: PERSFORMER
       d_model: 96
@@ -119,9 +103,6 @@ methods:
       epochs: 80
 
   linear_persformer:
-    runner: run_linear_persformer.py
-    run_filter:
-      model: LINEAR_PERSFORMER
     args:
       model: LINEAR_PERSFORMER
       d_model: 96
@@ -142,9 +123,6 @@ methods:
       epochs: 80
 
   latent_persformer:
-    runner: run_latent_persformer.py
-    run_filter:
-      model: LATENT_PERSFORMER
     args:
       model: LATENT_PERSFORMER
       d_model: 96

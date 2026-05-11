@@ -1,8 +1,22 @@
 experiment: N_filters
-datasets: [MNIST, EMNIST-B]
 seeds: [0, 1, 2, 3, 4]
-batch_size: 64
-lr: 0.001
-epochs: 100
 device: "mps"
-filters: [[0], [0, 4], [0, 4, 7, 13]]
+num_workers: 0
+
+datasets: [MNIST, EMNIST-B]
+
+common_persistence:
+  eps: 0.02
+
+filters:
+  - [0]
+  - [0, 4]
+  - [0, 4, 7, 13]
+
+methods:
+  persformer:
+    args:
+      model: PERSFORMER
+      lr: 0.001
+      batch_size: 64
+      epochs: 100
