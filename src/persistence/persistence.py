@@ -11,16 +11,14 @@ def pht(image, image_base=None, pos=None, eps=None):
     dgm_pht = torch.zeros((0, dim))
     dgms = sublevel_persistence(image, eps=eps, pos=pos, sort="persistence")
 
-    for _i, dgm in enumerate(dgms):
+    for dgm in dgms:
         dgm_pht = torch.cat([dgm_pht, dgm])
 
     if image_base is not None:
         dgms_base = sublevel_persistence(image_base, eps=eps, pos=None, sort="persistence")
-        for _i, dgm_base_ in enumerate(dgms_base):
+        for dgm_base_ in dgms_base:
             dgm_base = torch.zeros(len(dgm_base_), dim)
             dgm_base[:, :3] = dgm_base_
-            dgm_base[:, 0] /= 1  # scale
-            dgm_base[:, 1] /= 1  # scale
             dgm_base[:, 3] = 1.0
             dgm_base[:, -1] = image.shape[0]  # n+1 direction
             dgm_pht = torch.cat([dgm_pht, dgm_base])

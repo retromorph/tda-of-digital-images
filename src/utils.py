@@ -3,7 +3,6 @@ import os
 import torch
 import torch.nn as nn
 
-from datetime import datetime
 try:
    from dotenv import load_dotenv
 except Exception:  # pragma: no cover - optional at runtime
@@ -27,22 +26,23 @@ def get_activation(activation_str, alpha=0.0):
       "LeakyReLU": nn.LeakyReLU(alpha),
       "CELU": nn.CELU(alpha)
    }
-   
+
    if activation_str not in activations.keys():
       raise ValueError("Supported activations are '{}'.".format("', '".join(activations.keys())))
 
    return activations[activation_str]
 
 
+def _hf_hidden_act(name: str) -> str:
+   mapping = {
+      "gelu": "gelu",
+      "relu": "relu",
+      "silu": "silu",
+      "swish": "silu",
+   }
+   key = str(name).strip().lower()
+   return mapping.get(key, "gelu")
+
+
 def argmin(lst):
   return lst.index(min(lst))
-
-
-def save_checkpoint(model, optimizer, args, dir="./chk"):
-   torch.save({
-        "model_state_dict": model.state_dict(),
-        "optimizer_state_dict": optimizer.state_dict(),
-        "args_dict": vars(args),
-        "args": args,
-        "datetime": datetime.now()
-    }, "{}/{}_{}_{}_seed-{}_epochs-{}.pt".format(dir, args.model, args.dataset, args.experiment, args.seed, args.epochs))

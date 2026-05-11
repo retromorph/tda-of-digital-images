@@ -14,8 +14,6 @@ SD04_CLASS_TO_IDX = {"L": 0, "W": 1, "R": 2, "T": 3, "A": 4}
 
 def get_nist_sd04_dataset(train=True):
     data, targets = _load_nist_sd04()
-    if train:
-        return ImageDataset(data, targets)
     return ImageDataset(data, targets)
 
 

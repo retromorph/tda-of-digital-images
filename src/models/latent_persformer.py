@@ -17,16 +17,7 @@ import torch
 import torch.nn as nn
 from transformers import PerceiverConfig, PerceiverModel
 
-
-def _hf_hidden_act(name: str) -> str:
-    mapping = {
-        "gelu": "gelu",
-        "relu": "relu",
-        "silu": "silu",
-        "swish": "silu",
-    }
-    key = str(name).strip().lower()
-    return mapping.get(key, "gelu")
+from src.utils import _hf_hidden_act
 
 
 class LatentPersformer(nn.Module):
@@ -34,7 +25,6 @@ class LatentPersformer(nn.Module):
 
     def __init__(
         self,
-        transform=None,
         d_in=9,
         d_out=2,
         d_model=128,

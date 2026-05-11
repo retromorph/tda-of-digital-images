@@ -105,6 +105,12 @@ class Trainer:
         loss_batches = []
         accum = max(1, int(train_cfg.grad_accum))
         max_norm = float(train_cfg.max_grad_norm)
+        def _flush():
+            if max_norm > 0:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
+            self.optimizer.step()
+            self.optimizer.zero_grad(set_to_none=True)
+
         self.optimizer.zero_grad(set_to_none=True)
         for step_idx, batch in enumerate(dataloader):
             x, mask, y = self._unpack_batch(batch)
@@ -114,17 +120,11 @@ class Trainer:
             loss = self.loss_fn(y_hat, y)
             (loss / accum).backward()
             if (step_idx + 1) % accum == 0:
-                if max_norm > 0:
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
-                self.optimizer.step()
-                self.optimizer.zero_grad(set_to_none=True)
+                _flush()
             loss_batches.append(float(loss.detach().cpu().item()))
         # flush leftover grads if dataset doesn't divide evenly
         if (len(loss_batches) % accum) != 0:
-            if max_norm > 0:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
-            self.optimizer.step()
-            self.optimizer.zero_grad(set_to_none=True)
+            _flush()
         self.history[stage].append(fmean(loss_batches) if loss_batches else float("nan"))
 
     def _eval_step(self, dataloader, stage):

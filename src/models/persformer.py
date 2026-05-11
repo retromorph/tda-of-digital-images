@@ -28,7 +28,6 @@ class Persformer(nn.Module):
 
     def __init__(
         self,
-        transform=None,
         d_in=9,
         d_out=2,
         d_model=128,
