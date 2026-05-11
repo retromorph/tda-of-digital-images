@@ -23,11 +23,11 @@ uv run jupyter notebook
 
 ```sh
 # полный конфиг по умолчанию
-uv run python runner.py --config default.yaml
+uv run python runner.py --config exp/config/unified/default.yaml
 
 # точечные оверрайды
 uv run python runner.py \
-  --config default.yaml \
+  --config exp/config/unified/default.yaml \
   --override seed=0 \
   --override device=cpu \
   --override dataset.name=MNIST \
@@ -50,9 +50,42 @@ uv run python runner.py \
 - `training.{batch_size, optimizer, scheduler, budget, early_stop, grad_accum, max_grad_norm}`
 - `logging.{experiment, tags}`
 
-## Sweeps
+Старые скрипты `exp/runners/run_*.py` остаются как тонкие шимы поверх единого `runner.py` (см. `exp/runners/_shim.py`).
 
-Свипов как отдельного слоя нет: пишите небольшой Python-скрипт, который перебирает seed/конфиги и зовёт `runner.run_with_overrides(config_path, overrides)`. Каждый ран сам по себе попадёт в MLflow.
+## Sweeps и benchmark
+
+Унифицированный оркестратор — `exp.pipelines.orchestrator`:
+
+```sh
+uv run python -m exp.pipelines.orchestrator \
+  --config exp/config/benchmark/preliminary_clean.yaml --dry_run
+
+uv run python -m exp.pipelines.orchestrator \
+  --config exp/config/benchmark/preliminary_clean.yaml
+
+# фильтр по методу/таску
+uv run python -m exp.pipelines.orchestrator \
+  --config exp/config/benchmark/preliminary_clean.yaml \
+  --only_method persformer --only_task mnist_clean
+```
+
+Быстрый smoke поверх той же логики:
+
+```sh
+uv run python -m exp.pipelines.orchestrator --config exp/config/smoke/preliminary_quick.yaml
+uv run python -m exp.pipelines.smoke.fixed_encoders
+```
+
+Отдельные пайплайны для аблейшнов перенесены на тот же оркестратор:
+
+```sh
+uv run python -m exp.pipelines.legacy.main
+uv run python -m exp.pipelines.ablations.invariance
+uv run python -m exp.pipelines.ablations.n_filters
+uv run python -m exp.pipelines.ablations.directions
+```
+
+Каждый sweep также пишет в MLflow артефакт-манифест (`orchestrator_manifest.json`) с историей вызванных команд.
 
 ## Кэш диаграмм
 
@@ -87,7 +120,7 @@ uv run python runner.py \
 
 ```sh
 cp .env.example .env
-uv run python runner.py --config default.yaml --override training.budget.value=1
+uv run python runner.py --config exp/config/unified/default.yaml --override training.budget.value=1
 ```
 
 Сводка по эксперименту:

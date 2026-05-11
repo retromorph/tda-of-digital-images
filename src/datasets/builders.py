@@ -1,3 +1,6 @@
+import os
+import pickle
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -121,6 +124,22 @@ def _compute_diagrams(dataset, filtration_apply):
     return diagrams, (schema or {})
 
 
+def _load_legacy_cache(path):
+    if not os.path.isfile(path):
+        return None
+    payload = pickle.load(open(path, "rb"))
+    if isinstance(payload, tuple) and len(payload) == 2:
+        diagrams, labels = payload
+        return {"diagrams": diagrams, "labels": labels, "schema": {}}
+    if isinstance(payload, dict):
+        return {
+            "diagrams": payload.get("diagrams", []),
+            "labels": payload.get("labels"),
+            "schema": payload.get("schema", {}),
+        }
+    return None
+
+
 def get_image_dataset(cfg: ImageDatasetConfig):
     if cfg.output not in ["1d", "2d"]:
         raise ValueError("Supported outputs are '1d' or '2d'.")
@@ -186,11 +205,20 @@ def get_persistence_dataset(cfg: PersistenceDatasetConfig):
     )
 
     filtration_apply = FILTRATIONS.get(cfg.filtration)(filt_params)
+    transform_prefix = f"{cfg.transform_str}-{cfg.power}_" if cfg.transform_str is not None else ""
+    suffix = f"seed-{cfg.seed}"
+    legacy_train = f"./data/diagrams/{cfg.dataset_str}/{cfg.dataset_str}_train_{suffix}.pkl"
+    legacy_val = f"./data/diagrams/{cfg.dataset_str}/{cfg.dataset_str}_val_{suffix}.pkl"
+    legacy_test = f"./data/diagrams/{cfg.dataset_str}/{cfg.dataset_str}_test_{transform_prefix}{suffix}.pkl"
 
-    def _get_split(split_name, ds, path):
+    def _get_split(split_name, ds, path, legacy_path):
         payload = load_cache(path)
         if payload is not None:
             return payload
+        if cfg.filtration == "pht_directional" and len(filt_params) == 0:
+            legacy = _load_legacy_cache(legacy_path)
+            if legacy is not None:
+                return legacy
         print(f"Computing filtration for {split_name}, this can take several minutes...")
         dgm, schema = _compute_diagrams(ds, filtration_apply)
         labels = ds.targets
@@ -210,9 +238,9 @@ def get_persistence_dataset(cfg: PersistenceDatasetConfig):
         )
         return payload
 
-    train_payload = _get_split("train", dataset_train, train_filename)
-    val_payload = _get_split("val", dataset_val, val_filename)
-    test_payload = _get_split("test", dataset_test, test_filename)
+    train_payload = _get_split("train", dataset_train, train_filename, legacy_train)
+    val_payload = _get_split("val", dataset_val, val_filename, legacy_val)
+    test_payload = _get_split("test", dataset_test, test_filename, legacy_test)
 
     dataset_pht_train = PersistenceDataset(train_payload["diagrams"], train_payload["labels"], schema=train_payload.get("schema", {}))
     dataset_pht_val = PersistenceDataset(val_payload["diagrams"], val_payload["labels"], schema=val_payload.get("schema", {}))

@@ -25,6 +25,7 @@ def main():
         default=[],
         help="Dotlist override, e.g. model.args.d_model=96 (can be passed multiple times).",
     )
+    parser.add_argument("--inproc", action=argparse.BooleanOptionalAction, default=False)
     args = parser.parse_args()
     run_with_overrides(args.config, args.override)
 
