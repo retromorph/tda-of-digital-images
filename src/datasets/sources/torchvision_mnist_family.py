@@ -21,16 +21,6 @@ def mnist_loader():
         DatasetMeta(task="classification", n_classes=10, color="gray", image_size=(28, 28)),
     )
 
-
-@DATASETS("MNIST-RGB")
-def mnist_rgb_loader():
-    return _build_loader(
-        lambda: MNIST(root="./data/image", train=True, download=True),
-        lambda: MNIST(root="./data/image", train=False, download=True),
-        DatasetMeta(task="classification", n_classes=10, color="rgb", image_size=(28, 28)),
-    )
-
-
 @DATASETS("KMNIST")
 def kmnist_loader():
     return _build_loader(
@@ -69,15 +59,6 @@ def fmnist_loader():
 
 
 @DATASETS("CIFAR-10")
-def cifar10_loader():
-    return _build_loader(
-        lambda: CIFAR10(root="./data/image", train=True, download=True),
-        lambda: CIFAR10(root="./data/image", train=False, download=True),
-        DatasetMeta(task="classification", n_classes=10, color="rgb", image_size=(32, 32)),
-    )
-
-
-@DATASETS("CIFAR-10-GRAY")
 def cifar10_gray_loader():
     return _build_loader(
         lambda: CIFAR10(root="./data/image", train=True, download=True),

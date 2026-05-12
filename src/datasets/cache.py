@@ -51,7 +51,10 @@ def load_cache(path: str):
     if not os.path.exists(path):
         return None
     with open(path, "rb") as f:
-        return pickle.load(f)
+        payload = pickle.load(f)
+    if not isinstance(payload, dict) or payload.get("version") != CACHE_VERSION:
+        return None
+    return payload
 
 
 def save_cache(path: str, payload) -> None:

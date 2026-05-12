@@ -127,7 +127,8 @@ def _compute_diagrams(dataset, filtration_apply):
 def _load_legacy_cache(path):
     if not os.path.isfile(path):
         return None
-    payload = pickle.load(open(path, "rb"))
+    with open(path, "rb") as f:
+        payload = pickle.load(f)
     if isinstance(payload, tuple) and len(payload) == 2:
         diagrams, labels = payload
         return {"diagrams": diagrams, "labels": labels, "schema": {}}
@@ -186,10 +187,6 @@ def get_persistence_dataset(cfg: PersistenceDatasetConfig):
         output="2d",
     )
     dataset_train, dataset_val, dataset_test, meta = get_image_dataset(image_cfg)
-
-    y_train = dataset_train.targets
-    y_val = dataset_val.targets
-    y_test = dataset_test.targets
 
     filt_params = cfg.filtration_params or {}
     cache_key = stable_hash(cfg.filtration, filt_params)

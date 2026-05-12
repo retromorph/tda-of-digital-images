@@ -38,7 +38,7 @@ def _register(name: str, input_kind: str, forward_takes_mask: bool = False):
 
 @_register("MLP", input_kind="flat")
 def _build_mlp(meta, **cfg):
-    return MLP(meta.dim**2, 1 if meta.task == "regression" else meta.n_classes, **cfg)
+    return MLP(meta.image_size[0] ** 2, 1 if meta.task == "regression" else meta.n_classes, **cfg)
 
 
 @_register("ResNet", input_kind="image")
@@ -53,7 +53,7 @@ def _build_resnet(meta, **cfg):
 def _build_vit(meta, **cfg):
     if "d_hidden" in cfg and "d_ff" not in cfg:
         cfg["d_ff"] = cfg.pop("d_hidden")
-    return ViT(meta.dim, 1 if meta.task == "regression" else meta.n_classes, **cfg)
+    return ViT(meta.image_size[0], 1 if meta.task == "regression" else meta.n_classes, **cfg)
 
 
 @_register("PHTS", input_kind="diagram", forward_takes_mask=True)

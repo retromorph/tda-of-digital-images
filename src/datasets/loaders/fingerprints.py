@@ -7,14 +7,23 @@ from PIL import Image
 
 from src.datasets.types import ImageDataset
 
-SD04_ROOT = "../../data/NISTSpecialDatabase4/sd04/png_txt"
+SD04_ROOT = "./data/NISTSpecialDatabase4/sd04/png_txt"
 SD04_FIG_DIRS = [f"figs_{i}" for i in range(8)]
 SD04_CLASS_TO_IDX = {"L": 0, "W": 1, "R": 2, "T": 3, "A": 4}
 
 
-def get_nist_sd04_dataset(train=True):
+def get_nist_sd04_dataset(train=True, *, seed=0, test_fraction=1 / 6):
     data, targets = _load_nist_sd04()
-    return ImageDataset(data, targets)
+    n_total = len(targets)
+    n_test = int(n_total * test_fraction)
+    if n_test <= 0 or n_test >= n_total:
+        raise ValueError("Invalid test_fraction for NIST-SD04 dataset split.")
+    perm = torch.randperm(n_total, generator=torch.Generator().manual_seed(seed))
+    test_idx = perm[:n_test]
+    train_val_idx = perm[n_test:]
+    if train:
+        return ImageDataset(data[train_val_idx], targets[train_val_idx])
+    return ImageDataset(data[test_idx], targets[test_idx])
 
 
 def _load_nist_sd04():

@@ -8,7 +8,7 @@ from PIL import Image
 
 from src.datasets.types import ImageDataset
 
-POROUS_ROOT = "../../data/2D-porous-media-images"
+POROUS_ROOT = "./data/2D-porous-media-images"
 POROUS_IMAGES_SUBDIR = "porous_media_images"
 POROUS_CSV_FILENAME = "permeability.csv"
 
@@ -40,7 +40,7 @@ def _index_images(images_dir):
     return files_by_idx
 
 
-def _load_images_and_targets(dataset_root, images_subdir, csv_filename):
+def _load_images_and_targets(dataset_root, images_subdir, csv_filename, target_size=None):
     root = Path(dataset_root)
     images_dir = root / images_subdir
     csv_path = root / csv_filename
@@ -67,6 +67,9 @@ def _load_images_and_targets(dataset_root, images_subdir, csv_filename):
             missing.append(idx)
             continue
         img = Image.open(img_path).convert("L")
+        if target_size is not None:
+            h, w = target_size
+            img = img.resize((w, h), Image.BILINEAR)
         images.append(torch.from_numpy(np.array(img, dtype=np.uint8)))
         targets.append(permeability)
 
@@ -82,16 +85,18 @@ def _load_images_and_targets(dataset_root, images_subdir, csv_filename):
     return data, y
 
 
-def get_porous2d_clean_dataset(
-    train=True,
+def get_porous2d_clean_datasets(
     *,
     dataset_root=POROUS_ROOT,
     images_subdir=POROUS_IMAGES_SUBDIR,
     csv_filename=POROUS_CSV_FILENAME,
     seed=0,
     test_fraction=1 / 6,
+    target_size=None,
 ):
-    data, targets = _load_images_and_targets(dataset_root, images_subdir, csv_filename)
+    data, targets = _load_images_and_targets(
+        dataset_root, images_subdir, csv_filename, target_size=target_size
+    )
     n_total = len(targets)
     n_test = int(n_total * test_fraction)
 
@@ -102,6 +107,7 @@ def get_porous2d_clean_dataset(
     test_idx = perm[:n_test]
     train_val_idx = perm[n_test:]
 
-    if train:
-        return ImageDataset(data[train_val_idx], targets[train_val_idx])
-    return ImageDataset(data[test_idx], targets[test_idx])
+    return (
+        ImageDataset(data[train_val_idx], targets[train_val_idx]),
+        ImageDataset(data[test_idx], targets[test_idx]),
+    )

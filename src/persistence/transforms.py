@@ -1,3 +1,4 @@
+import math
 import torch
 import numpy as np
 
@@ -14,23 +15,18 @@ def direction_filter(img, alpha, agg="mult"):
     else:
         raise ValueError()
 
-    if width == 28:
-        img_out = np.zeros((40, 40))
-        img_out[6:34, 6:34] = img
-        filter_hor = np.repeat(np.linspace(1, 0, 40), 40).reshape(40, 40).T
-        filter_dir = (rotate(filter_hor, alpha, reshape=False))[6:34, :][:, 6:34]
-    elif width == 32:
-        img_out = np.zeros((46, 46))
-        img_out[7:39, 7:39] = img
-        filter_hor = np.repeat(np.linspace(1, 0, 46), 46).reshape(46, 46).T
-        filter_dir = (rotate(filter_hor, alpha, reshape=False))[7:39, :][:, 7:39]
-    elif width == 64:
-        img_out = np.zeros((92, 92))
-        img_out[14:78, 14:78] = img
-        filter_hor = np.repeat(np.linspace(1, 0, 92), 92).reshape(92, 92).T
-        filter_dir = (rotate(filter_hor, alpha, reshape=False))[14:78, :][:, 14:78]
-    else:
-        raise ValueError("Only sizes of 28x28, 32x32, and 64x64 pixels are supported.")
+    # Canvas must be wide enough that a rotated filter covers the full image.
+    # sqrt(2) * width is the minimum diagonal needed; bump by 1 when the
+    # excess is odd so padding is symmetric on both sides.
+    padded = math.ceil(width * math.sqrt(2))
+    if (padded - width) % 2 != 0:
+        padded += 1
+    pad = (padded - width) // 2
+
+    img_out = np.zeros((padded, padded))
+    img_out[pad:pad + width, pad:pad + width] = img
+    filter_hor = np.repeat(np.linspace(1, 0, padded), padded).reshape(padded, padded).T
+    filter_dir = rotate(filter_hor, alpha, reshape=False)[pad:pad + width, pad:pad + width]
 
     if agg == "mult":
         g = np.multiply
