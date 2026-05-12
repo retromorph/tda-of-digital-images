@@ -40,6 +40,8 @@ class RunResult:
     experiment_name: str
     epochs_completed: int
     stopped_early: bool
+    stopped_by_budget: bool = False
+    total_steps: int = 0
 
 
 def _sin_encoding_from_name(name: str | None) -> list[float] | None:
@@ -188,11 +190,18 @@ def _make_optim_config(cfg, lr: float) -> OptimConfig:
 
 def _make_train_config(cfg) -> TrainConfig:
     budget_cfg = cfg.training.budget
-    if budget_cfg.kind != "epochs":
-        raise ValueError("Unsupported training.budget.kind '{}': only 'epochs' is supported.".format(budget_cfg.kind))
+    kind = str(budget_cfg.kind)
+    value = int(budget_cfg.value)
+    epochs_hint = getattr(budget_cfg, "epochs_hint", None)
+    # For epoch budgets the outer loop runs exactly `value` epochs.
+    # For steps/seconds budgets, `epochs_hint` caps the outer loop and sets the
+    # scheduler horizon; the actual stop is driven by the per-step check.
+    n_epochs = value if kind == "epochs" else int(epochs_hint)
     early = cfg.training.early_stop
     return TrainConfig(
-        epochs=int(budget_cfg.value),
+        epochs=n_epochs,
+        budget_kind=kind,
+        budget_value=value,
         batch_size=int(cfg.training.batch_size),
         grad_accum=int(getattr(cfg.training, "grad_accum", 1) or 1),
         max_grad_norm=float(getattr(cfg.training, "max_grad_norm", 0.0) or 0.0),
@@ -276,7 +285,14 @@ def run_experiment(cfg) -> RunResult:
         )
         epochs_completed = int(outcome["epochs_completed"])
         stopped_early = bool(outcome["stopped_early"])
-        update_runtime_metrics(logger, started_at, device=device, step=max(0, epochs_completed - 1))
+        stopped_by_budget = bool(outcome.get("stopped_by_budget", False))
+        total_steps = int(outcome.get("total_steps", 0))
+        final_step = max(0, epochs_completed - 1)
+        update_runtime_metrics(logger, started_at, device=device, step=final_step)
+        logger.log(
+            {"total_steps": total_steps, "stopped_by_budget": int(stopped_by_budget)},
+            step=final_step,
+        )
     finally:
         logger.end()
 
@@ -288,4 +304,6 @@ def run_experiment(cfg) -> RunResult:
         experiment_name=experiment_name,
         epochs_completed=epochs_completed,
         stopped_early=stopped_early,
+        stopped_by_budget=stopped_by_budget,
+        total_steps=total_steps,
     )

@@ -1,10 +1,12 @@
 import argparse
 import json
 import os
+import statistics
 import subprocess
 import sys
 import tempfile
 import time
+from collections import defaultdict
 from itertools import product
 from pathlib import Path
 
@@ -13,6 +15,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 
+# Budget keys that strict_compute mode forbids at the method level.
+_BUDGET_KEYS = {"epochs", "budget", "epochs_hint", "steps", "seconds"}
+
 # Keys consumed by training/optim/scheduler/budget — they should never end up in
 # `model.args` or `encoder.args`. Add new training-level fields here.
 _TRAIN_KEYS = {
@@ -20,6 +25,10 @@ _TRAIN_KEYS = {
     "lr",
     "batch_size",
     "epochs",
+    "budget",
+    "epochs_hint",
+    "steps",
+    "seconds",
     "weight_decay",
     "warmup_epochs",
     "eta_min",
@@ -118,13 +127,15 @@ def _build_overrides(cfg, task, method_name, method_cfg, seed):
             "training.scheduler.name",
             "warmup_cosine" if raw_args.get("warmup_epochs", 0) > 0 else "none",
         ),
-        _to_override("training.budget.value", raw_args.get("epochs", 10)),
+        *_budget_overrides(cfg, task, raw_args),
         _to_override("training.grad_accum", raw_args.get("grad_accum", 1)),
         _to_override("training.max_grad_norm", raw_args.get("max_grad_norm", 0.0)),
         _to_override("training.early_stop.patience", raw_args.get("early_stop_patience", 0)),
         _to_override("training.early_stop.min_delta", raw_args.get("early_stop_min_delta", 0.0)),
         _to_override("logging.experiment", f"{experiment_root}/{task['name']}"),
     ]
+
+    overrides.append(_to_override("logging.tags.orchestrator_method", method_name))
 
     common = cfg.get("common_persistence", {}) or {}
     if "idx" in common:
@@ -139,7 +150,100 @@ def _build_overrides(cfg, task, method_name, method_cfg, seed):
     return overrides
 
 
-def _log_manifest_to_mlflow(cfg, cfg_path, manifest, total, failures):
+def _budget_overrides(cfg, task, raw_args):
+    """Return the training.budget.* overrides for one run.
+
+    Priority: task-level budget > top-level budget > legacy per-method epochs key.
+    """
+    effective = task.get("budget") or cfg.get("budget")
+    if effective:
+        parts = [
+            _to_override("training.budget.kind", effective.get("kind", "epochs")),
+            _to_override("training.budget.value", effective["value"]),
+        ]
+        if effective.get("epochs_hint") is not None:
+            parts.append(_to_override("training.budget.epochs_hint", effective["epochs_hint"]))
+        return parts
+    return [_to_override("training.budget.value", raw_args.get("epochs", 10))]
+
+
+def _collect_child_metrics(cfg, manifest):
+    """Query MLflow for child-run metrics across all (task, method, seed) combos."""
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "sqlite:///mlruns/mlflow.db")
+    mlflow.set_tracking_uri(tracking_uri)
+    experiment_root = cfg["experiment"]
+    task_names = list({e["task_name"] for e in manifest})
+    records = []
+    for task_name in task_names:
+        exp_name = "{}/{}".format(experiment_root, task_name)
+        try:
+            runs_df = mlflow.search_runs(experiment_names=[exp_name])
+        except Exception:
+            continue
+        if runs_df is None or len(runs_df) == 0:
+            continue
+        for _, row in runs_df.iterrows():
+            records.append({
+                "task_name": task_name,
+                "method": row.get("tags.orchestrator_method", "unknown"),
+                "seed": row.get("tags.seed"),
+                "acc": row.get("metrics.acc_test_at_val_best"),
+                "wallclock_s": row.get("metrics.train_wallclock_s"),
+                "flops_per_sample": row.get("metrics.flops_per_sample"),
+            })
+    return records
+
+
+def _build_leaderboards(records):
+    """Aggregate child-run metrics and produce three per-task rankings."""
+    groups = defaultdict(list)
+    for r in records:
+        if r["acc"] is not None:
+            groups[(r["task_name"], r["method"])].append(r)
+
+    tasks_set = {k[0] for k in groups}
+    result = {}
+    for task_name in sorted(tasks_set):
+        task_groups = {m: vs for (t, m), vs in groups.items() if t == task_name}
+        rows = []
+        for method, entries in task_groups.items():
+            accs = [e["acc"] for e in entries if e["acc"] is not None]
+            wallclocks = [e["wallclock_s"] for e in entries if e["wallclock_s"] is not None]
+            flops_vals = [e["flops_per_sample"] for e in entries if e["flops_per_sample"] is not None]
+            if not accs:
+                continue
+            acc_mean = statistics.mean(accs)
+            acc_std = statistics.stdev(accs) if len(accs) > 1 else 0.0
+            wallclock_median = statistics.median(wallclocks) if wallclocks else None
+            flops = statistics.median(flops_vals) if flops_vals else None
+            rows.append({
+                "method": method,
+                "n_seeds": len(accs),
+                "acc_mean": acc_mean,
+                "acc_std": acc_std,
+                "wallclock_s_median": wallclock_median,
+                "flops_per_sample": flops,
+                "acc_per_wallclock": acc_mean / wallclock_median if wallclock_median else None,
+                "acc_per_flops": acc_mean / flops if flops else None,
+            })
+
+        def _rank(rows, key):
+            eligible = [dict(r) for r in rows if r.get(key) is not None]
+            ineligible = [dict(r) for r in rows if r.get(key) is None]
+            ranked = sorted(eligible, key=lambda r: r[key], reverse=True)
+            for i, r in enumerate(ranked):
+                r["rank"] = i + 1
+            return ranked + ineligible
+
+        result[task_name] = {
+            "by_acc": _rank(rows, "acc_mean"),
+            "by_acc_per_wallclock": _rank(rows, "acc_per_wallclock"),
+            "by_acc_per_flops": _rank(rows, "acc_per_flops"),
+        }
+    return result
+
+
+def _log_manifest_to_mlflow(cfg, cfg_path, manifest, total, failures, *, leaderboards=None, strict=False):
     tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "sqlite:///mlruns/mlflow.db")
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment("EXP_ARTIFACTS")
@@ -151,9 +255,16 @@ def _log_manifest_to_mlflow(cfg, cfg_path, manifest, total, failures):
         with mlflow.start_run(run_name=run_name):
             mlflow.log_param("experiment_root", str(cfg["experiment"]))
             mlflow.log_param("config_path", str(cfg_path))
+            mlflow.log_param("strict_compute", str(strict))
             mlflow.log_metric("total_runs", total)
             mlflow.log_metric("failures", failures)
             mlflow.log_artifact(str(out_path), artifact_path="orchestrator")
+            if leaderboards is not None:
+                lb_path = Path(tmpdir) / "leaderboards.json"
+                with open(lb_path, "w", encoding="utf-8") as f:
+                    json.dump(leaderboards, f, indent=2)
+                mlflow.log_artifact(str(lb_path), artifact_path="leaderboards")
+                mlflow.log_metric("leaderboard_n_tasks", len(leaderboards))
             return mlflow.get_artifact_uri("orchestrator")
 
 
@@ -177,6 +288,20 @@ def run(cfg_path=None, *, cfg_dict=None, dry_run=False, only_method=None, only_t
     methods = cfg["methods"]
     tasks = cfg["tasks"]
     seeds = cfg["seeds"]
+
+    strict = bool(cfg.get("strict_compute", False))
+    if strict:
+        for mname, mcfg in methods.items():
+            offenders = _BUDGET_KEYS & set((mcfg.get("args") or {}).keys())
+            if offenders:
+                raise ValueError(
+                    "strict_compute: method '{}' overrides budget keys {}".format(mname, sorted(offenders))
+                )
+        top_budget = cfg.get("budget")
+        has_task_budget = any("budget" in t for t in tasks)
+        if not top_budget and not has_task_budget:
+            raise ValueError("strict_compute requires a top-level or per-task 'budget' block in the config")
+
     manifest = []
     total = 0
     failures = 0
@@ -224,7 +349,17 @@ def run(cfg_path=None, *, cfg_dict=None, dry_run=False, only_method=None, only_t
         if code != 0:
             failures += 1
 
-    artifact_uri = _log_manifest_to_mlflow(cfg, cfg_path, manifest, total, failures)
+    leaderboards = None
+    if not dry_run and failures < total:
+        try:
+            child_records = _collect_child_metrics(cfg, manifest)
+            leaderboards = _build_leaderboards(child_records)
+        except Exception as exc:
+            print("Warning: failed to build leaderboards: {}".format(exc))
+
+    artifact_uri = _log_manifest_to_mlflow(
+        cfg, cfg_path, manifest, total, failures, leaderboards=leaderboards, strict=strict
+    )
     print("\nLogged manifest artifact: {}".format(artifact_uri))
     print("Runs: {}, failures: {}".format(total, failures))
     return 1 if failures > 0 else 0

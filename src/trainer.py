@@ -1,3 +1,4 @@
+import time
 from dataclasses import dataclass, field
 from statistics import fmean
 
@@ -20,7 +21,9 @@ class OptimConfig:
 
 @dataclass
 class TrainConfig:
-    epochs: int = 10
+    epochs: int = 10              # outer loop cap; for non-epoch budgets this is epochs_hint
+    budget_kind: str = "epochs"   # "epochs" | "steps" | "seconds"
+    budget_value: int = 10        # target in the unit given by budget_kind
     batch_size: int = 128
     grad_accum: int = 1
     max_grad_norm: float = 0.0
@@ -105,11 +108,17 @@ class Trainer:
         loss_batches = []
         accum = max(1, int(train_cfg.grad_accum))
         max_norm = float(train_cfg.max_grad_norm)
+
         def _flush():
             if max_norm > 0:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
             self.optimizer.step()
             self.optimizer.zero_grad(set_to_none=True)
+            self._global_step += 1
+            if self._budget_kind == "steps" and self._global_step >= self._budget_value:
+                self._budget_reached = True
+            elif self._budget_kind == "seconds" and (time.monotonic() - self._budget_started_at) >= self._budget_value:
+                self._budget_reached = True
 
         self.optimizer.zero_grad(set_to_none=True)
         for step_idx, batch in enumerate(dataloader):
@@ -119,11 +128,13 @@ class Trainer:
                 y_hat, y = self._prepare_regression_targets(y_hat, y)
             loss = self.loss_fn(y_hat, y)
             (loss / accum).backward()
+            loss_batches.append(float(loss.detach().cpu().item()))
             if (step_idx + 1) % accum == 0:
                 _flush()
-            loss_batches.append(float(loss.detach().cpu().item()))
-        # flush leftover grads if dataset doesn't divide evenly
-        if (len(loss_batches) % accum) != 0:
+                if self._budget_reached:
+                    break
+        # flush leftover grads only if we didn't stop mid-epoch
+        if not self._budget_reached and (len(loss_batches) % accum) != 0:
             _flush()
         self.history[stage].append(fmean(loss_batches) if loss_batches else float("nan"))
 
@@ -281,6 +292,12 @@ class Trainer:
         train_config: TrainConfig,
         desc: str | None = None,
     ):
+        self._budget_kind = train_config.budget_kind
+        self._budget_value = train_config.budget_value
+        self._budget_started_at = time.monotonic()
+        self._global_step = 0
+        self._budget_reached = False
+
         self._build_optimizer(optim_config)
         self.model.to(self.device)
         scheduler_obj = self._build_scheduler(optim_config, train_config.epochs)
@@ -328,8 +345,14 @@ class Trainer:
                         pbar.set_postfix_str(self._postfix(epoch_idx, current_lr) + " | early-stop")
                         break
 
+            if self._budget_reached:
+                pbar.set_postfix_str(self._postfix(epoch_idx, current_lr) + " | budget")
+                break
+
         return {
             "history": self.history,
             "stopped_early": stopped_early,
+            "stopped_by_budget": self._budget_reached,
             "epochs_completed": len(self.history["train"]),
+            "total_steps": self._global_step,
         }

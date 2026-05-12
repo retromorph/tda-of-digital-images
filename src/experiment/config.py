@@ -40,8 +40,9 @@ class ComponentConfig:
 
 @dataclass
 class BudgetConfig:
-    kind: str = "epochs"
-    value: int = 10
+    kind: str = "epochs"          # "epochs" | "steps" | "seconds"
+    value: int = 10                # epochs / global optimizer steps / wall-clock seconds
+    epochs_hint: int | None = None # scheduler horizon + outer-loop cap for non-epoch budgets
 
 
 @dataclass
@@ -131,8 +132,12 @@ def _validate_config(cfg: ExperimentConfig) -> None:
         raise ValueError("filtration config is required for model '{}'.".format(cfg.model.name))
     if spec.input_kind == "encoded" and cfg.encoder is None:
         raise ValueError("encoder config is required for encoded model '{}'.".format(cfg.model.name))
-    if cfg.training.budget.kind not in {"epochs"}:
+    if cfg.training.budget.kind not in {"epochs", "steps", "seconds"}:
         raise ValueError("Unsupported training.budget.kind '{}'.".format(cfg.training.budget.kind))
+    if cfg.training.budget.kind != "epochs" and not cfg.training.budget.epochs_hint:
+        raise ValueError(
+            "training.budget.epochs_hint is required when budget.kind is '{}'.".format(cfg.training.budget.kind)
+        )
 
 
 def load_config(path: str | Path, overrides: list[str] | None = None) -> ExperimentConfig:
