@@ -198,6 +198,8 @@ def _make_train_config(cfg) -> TrainConfig:
     # scheduler horizon; the actual stop is driven by the per-step check.
     n_epochs = value if kind == "epochs" else int(epochs_hint)
     early = cfg.training.early_stop
+    log_cfg = cfg.logging
+    bw_path = getattr(log_cfg, "best_weights_artifact_path", None) or "weights/best.pt"
     return TrainConfig(
         epochs=n_epochs,
         budget_kind=kind,
@@ -208,6 +210,8 @@ def _make_train_config(cfg) -> TrainConfig:
         early_stop_patience=int(early.patience),
         early_stop_metric=str(early.metric),
         early_stop_min_delta=float(early.min_delta),
+        save_best_weights=bool(getattr(log_cfg, "save_best_weights", False)),
+        best_weights_artifact_path=str(bw_path),
     )
 
 

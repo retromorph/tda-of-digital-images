@@ -67,6 +67,8 @@ class TrainingConfig:
 class LoggingConfig:
     experiment: str = "Test/default/default"
     tags: dict = field(default_factory=dict)
+    save_best_weights: bool = False
+    best_weights_artifact_path: str = "weights/best.pt"
 
 
 @dataclass

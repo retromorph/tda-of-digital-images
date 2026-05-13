@@ -13,6 +13,9 @@ common_persistence:
   idx: [0, 2, 4, 6, 7, 9, 11, 13, 16]
   eps: 0.02
 
+logging:
+  save_best_weights: true
+
 tasks:
   - name: mnist_clean
     dataset: MNIST

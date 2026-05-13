@@ -137,6 +137,13 @@ def _build_overrides(cfg, task, method_name, method_cfg, seed):
 
     overrides.append(_to_override("logging.tags.orchestrator_method", method_name))
 
+    log_cfg = cfg.get("logging") or {}
+    if log_cfg.get("save_best_weights"):
+        overrides.append(_to_override("logging.save_best_weights", True))
+    bw_path = log_cfg.get("best_weights_artifact_path")
+    if bw_path:
+        overrides.append(_to_override("logging.best_weights_artifact_path", bw_path))
+
     common = cfg.get("common_persistence", {}) or {}
     if "idx" in common:
         overrides.append(_to_override("filtration.diagram_idx", common["idx"]))

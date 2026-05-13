@@ -1,5 +1,7 @@
+import tempfile
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from pathlib import Path
 from statistics import fmean
 
 import torch
@@ -30,6 +32,8 @@ class TrainConfig:
     early_stop_patience: int = 0
     early_stop_metric: str = "loss_val"
     early_stop_min_delta: float = 0.0
+    save_best_weights: bool = False
+    best_weights_artifact_path: str = "weights/best.pt"
 
 
 class Trainer:
@@ -312,6 +316,8 @@ class Trainer:
         best_val = float("inf")
         bad_epochs = 0
         stopped_early = False
+        best_state = None
+        best_epoch = -1
 
         pbar = tqdm(range(train_config.epochs), desc=desc, bar_format="{desc:<11.11}{percentage:3.0f}%|{bar:3}{r_bar}")
         for epoch_idx in pbar:
@@ -333,21 +339,49 @@ class Trainer:
                     epoch_idx,
                 )
 
-            if early_stop_patience > 0:
-                val_now = self.history["val"][epoch_idx]
-                if val_now + early_stop_min_delta < best_val:
-                    best_val = val_now
-                    bad_epochs = 0
-                else:
-                    bad_epochs += 1
-                    if bad_epochs >= early_stop_patience:
-                        stopped_early = True
-                        pbar.set_postfix_str(self._postfix(epoch_idx, current_lr) + " | early-stop")
-                        break
+            val_now = self.history["val"][epoch_idx]
+            improved = val_now + early_stop_min_delta < best_val
+            if improved:
+                best_val = val_now
+                bad_epochs = 0
+                if train_config.save_best_weights:
+                    best_state = {k: v.detach().cpu().clone() for k, v in self.model.state_dict().items()}
+                    best_epoch = epoch_idx
+            elif early_stop_patience > 0:
+                bad_epochs += 1
+                if bad_epochs >= early_stop_patience:
+                    stopped_early = True
+                    pbar.set_postfix_str(self._postfix(epoch_idx, current_lr) + " | early-stop")
+                    break
 
             if self._budget_reached:
                 pbar.set_postfix_str(self._postfix(epoch_idx, current_lr) + " | budget")
                 break
+
+        epochs_completed = len(self.history["train"])
+        final_step = max(0, epochs_completed - 1)
+        if (
+            train_config.save_best_weights
+            and self.logger is not None
+            and best_state is not None
+        ):
+            rel = Path(train_config.best_weights_artifact_path)
+            artifact_dir = None if rel.parent == Path(".") else str(rel.parent)
+            payload = {
+                "state_dict": best_state,
+                "best_epoch": best_epoch,
+                "best_val_loss": float(best_val),
+            }
+            with tempfile.TemporaryDirectory() as td:
+                tmp_path = Path(td) / rel.name
+                torch.save(payload, str(tmp_path))
+                self.logger.log_artifact(str(tmp_path), artifact_path=artifact_dir)
+            self.model.load_state_dict(best_state)
+            self.model.to(self.device)
+            self.logger.log(
+                {"best_val_loss": float(best_val), "best_epoch": float(best_epoch)},
+                step=final_step,
+            )
 
         return {
             "history": self.history,

@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import mlflow
 
@@ -79,3 +80,9 @@ class MLFlowLogger:
         safe_tags = _normalize_tags(tags)
         if safe_tags:
             mlflow.set_tags(safe_tags)
+
+    def log_artifact(self, local_path: str | Path, artifact_path: str | None = None) -> None:
+        path = Path(local_path)
+        if not path.is_file():
+            return
+        mlflow.log_artifact(str(path), artifact_path=artifact_path, run_id=self.run_id)

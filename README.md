@@ -48,7 +48,7 @@ uv run python runner.py \
 - `encoder.{name, args}` — для моделей с input_kind=encoded (registry в `src/encoders/`)
 - `model.{name, args}` — модель из `src/models/base.py` (registry)
 - `training.{batch_size, optimizer, scheduler, budget, early_stop, grad_accum, max_grad_norm}`
-- `logging.{experiment, tags}`
+- `logging.{experiment, tags, save_best_weights, best_weights_artifact_path}`
 
 ## Sweeps и benchmark
 
@@ -108,6 +108,7 @@ uv run python -m exp.pipelines.ablations.directions
 - gradient accumulation (`train_config.grad_accum`)
 - gradient clipping (`train_config.max_grad_norm > 0`)
 - early stopping по `loss_val` (`train_config.early_stop_patience`, `early_stop_min_delta`)
+- опционально: лучшие веса в MLflow (`logging.save_best_weights`, см. раздел MLflow)
 - per-epoch логирование `loss_*`, `acc_*` / `rmse_*`/`mae`/`r2`, `lr` и `loss_test_at_*_best`
 
 ## MLflow
@@ -129,7 +130,7 @@ uv run mlflow server \
   --port 5000
 ```
 
-## PyTorch: CPU и CUDA
+Чтобы в конце рана в MLflow попал файл с лучшими по `loss_val` весами (тот же критерий, что и у early stopping, с учётом `training.early_stop.min_delta`), задайте `logging.save_best_weights: true`. Артефакт по умолчанию — `weights/best.pt` внутри run (путь меняется через `logging.best_weights_artifact_path`). Файл — `torch.save` со словарём `state_dict`, `best_epoch`, `best_val_loss`; модель собирается из того же YAML, что и при обучении. После сохранения веса в объекте модели восстанавливаются к этому лучшему состоянию. На больших свипах флаг по умолчанию выключен, чтобы не раздувать артефакты.
 
 По умолчанию `uv sync` подтягивает CPU-сборки `torch`. Для CUDA задайте подходящий индекс PyTorch в проекте (см. [документацию PyTorch](https://pytorch.org/get-started/locally/) и [uv: indexes](https://docs.astral.sh/uv/concepts/projects/dependencies/#index-urls)) и переустановите зависимости.
 
