@@ -44,12 +44,13 @@ class Trainer:
     clipping, and val-loss based early stopping.
     """
 
-    def __init__(self, model, device, logger, task="classification", forward_takes_mask=False):
+    def __init__(self, model, device, logger, task="classification", forward_takes_mask=False, target_stats=None):
         self.model = model
         self.device = device
         self.logger = logger
         self.task = task
         self.forward_takes_mask = forward_takes_mask
+        self.target_stats = target_stats
         self.history = {
             "train": [],
             "val": [],
@@ -95,13 +96,17 @@ class Trainer:
     def _regression_metrics(self, y_hat, y):
         y_hat, y = self._prepare_regression_targets(y_hat, y)
         diff = y_hat - y
-        mse = torch.mean(diff * diff)
-        rmse = torch.sqrt(mse)
-        mae = torch.mean(torch.abs(diff))
+        # R² is scale-invariant so we compute it on whichever space we already have.
         ss_res = torch.sum(diff * diff)
         y_mean = torch.mean(y)
         ss_tot = torch.sum((y - y_mean) * (y - y_mean))
         r2 = 1.0 - (ss_res / ss_tot) if float(ss_tot) > 0.0 else torch.tensor(0.0, device=y.device)
+        # Report RMSE/MAE in original target units when standardization was applied.
+        scale = float(self.target_stats["std"]) if self.target_stats else 1.0
+        scaled_diff = diff * scale
+        mse = torch.mean(scaled_diff * scaled_diff)
+        rmse = torch.sqrt(mse)
+        mae = torch.mean(torch.abs(scaled_diff))
         return {
             "rmse": float(rmse.detach().cpu().item()),
             "mae": float(mae.detach().cpu().item()),

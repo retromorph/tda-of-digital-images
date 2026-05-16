@@ -74,7 +74,7 @@ class LatentPersformer(nn.Module):
                 nn.Dropout(decoder_dropout),
             ]
             prev = h
-        dec_layers += [nn.LayerNorm(prev), nn.Linear(prev, d_out)]
+        dec_layers += [nn.Linear(prev, d_out)]
         self.decoder = nn.Sequential(*dec_layers)
 
     def forward(self, X, mask):

@@ -2,6 +2,7 @@ from src.datasets.base import ColorMode, DatasetMeta, TaskKind
 from src.datasets.builders import (
     ImageDatasetConfig,
     PersistenceDatasetConfig,
+    apply_target_standardization,
     get_image_dataset,
     get_persistence_dataset,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "ImageDatasetConfig",
     "PersistenceDataset",
     "PersistenceDatasetConfig",
+    "apply_target_standardization",
     "build_image_transforms",
     "collate_fn",
     "get_image_dataset",

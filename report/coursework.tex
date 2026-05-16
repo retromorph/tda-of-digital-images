@@ -32,7 +32,7 @@ maxbibnames=99
 \counterwithin{table}{section}
 \counterwithin{figure}{section}
 
-\graphicspath{{graphics/}}%путь к рисункам
+\graphicspath{{graphics/}{figures/}}%путь к рисункам
 
 \makeatletter
 % \renewcommand{\@biblabel}[1]{#1.} % Заменяем библиографию с квадратных скобок на точку:
@@ -90,13 +90,19 @@ maxbibnames=99
     \hspace{1cm}
 \end{sloppypar}
 
-\section{Обзор литературы}
+\section{Обзор подходов к эмбеддингу диаграмм персистентности}
 \begin{sloppypar}
     \input{sections/related_work}
     \hspace{1cm}
 \end{sloppypar}
 
-\newpage 
-\printbibliography[heading=bibintoc] 
+\section{Предлагаемая архитектура}
+\begin{sloppypar}
+    \input{sections/proposed_architecture}
+    \hspace{1cm}
+\end{sloppypar}
+
+\newpage
+\printbibliography[heading=bibintoc]
 
 \end{document}

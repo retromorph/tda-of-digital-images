@@ -1,3 +1,4 @@
+import dataclasses
 import os
 import pickle
 
@@ -243,3 +244,34 @@ def get_persistence_dataset(cfg: PersistenceDatasetConfig):
     dataset_pht_val = PersistenceDataset(val_payload["diagrams"], val_payload["labels"], schema=val_payload.get("schema", {}))
     dataset_pht_test = PersistenceDataset(test_payload["diagrams"], test_payload["labels"], schema=test_payload.get("schema", {}))
     return dataset_pht_train, dataset_pht_val, dataset_pht_test, meta
+
+
+def apply_target_standardization(ds_train, ds_val, ds_test, meta):
+    """For regression tasks, standardize targets to zero mean / unit std using
+    statistics computed on the train split. The diagram/image caches keep raw
+    target values; standardization is applied in-memory after the datasets are
+    built.
+
+    Stats are recorded on ``meta.target_stats`` so the trainer can recover RMSE/MAE
+    in the original units. No-op for classification or if stats already present.
+    """
+    if getattr(meta, "task", "classification") != "regression":
+        return ds_train, ds_val, ds_test, meta
+    if getattr(meta, "target_stats", None) is not None:
+        return ds_train, ds_val, ds_test, meta
+
+    y_train = torch.as_tensor(ds_train.targets).float()
+    mean = float(y_train.mean().item())
+    std = float(y_train.std(unbiased=False).item())
+    if not (std > 0):
+        std = 1.0
+
+    def _scale(targets):
+        return (torch.as_tensor(targets).float() - mean) / std
+
+    ds_train.targets = _scale(ds_train.targets)
+    ds_val.targets = _scale(ds_val.targets)
+    ds_test.targets = _scale(ds_test.targets)
+
+    new_meta = dataclasses.replace(meta, target_stats={"mean": mean, "std": std})
+    return ds_train, ds_val, ds_test, new_meta

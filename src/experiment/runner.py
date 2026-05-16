@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass
 from src.datasets import (
     ImageDatasetConfig,
     PersistenceDatasetConfig,
+    apply_target_standardization,
     get_image_dataset,
     get_persistence_dataset,
 )
@@ -123,6 +124,8 @@ def build_from_registry(model_name: str, model_kwargs: dict, data_kwargs: dict, 
     else:
         raise ValueError("Unsupported input_kind '{}' for unified registry runner.".format(input_kind))
 
+    ds_train, ds_val, ds_test, meta = apply_target_standardization(ds_train, ds_val, ds_test, meta)
+
     model = spec.build(meta, **model_kwargs)
     dl_train = make_dataloader(ds_train, batch_size, shuffle=True, collate_fn=collate, num_workers=num_workers)
     dl_val = make_dataloader(ds_val, batch_size, collate_fn=collate, num_workers=num_workers)
@@ -140,6 +143,7 @@ def build_from_registry(model_name: str, model_kwargs: dict, data_kwargs: dict, 
 def _build_encoded_from_registry(cfg, spec, model_kwargs, batch_size: int, num_workers: int):
     data_kwargs = _build_persistence_kwargs(cfg)
     ds_train, ds_val, ds_test, meta = get_persistence_dataset(PersistenceDatasetConfig(**data_kwargs))
+    ds_train, ds_val, ds_test, meta = apply_target_standardization(ds_train, ds_val, ds_test, meta)
 
     if cfg.encoder is None:
         raise ValueError("encoder section is required when model input_kind is 'encoded'.")
@@ -252,6 +256,10 @@ def run_experiment(cfg) -> RunResult:
         "seed": int(cfg.seed),
         "task": task,
     }
+    target_stats = getattr(artifacts.meta, "target_stats", None)
+    if target_stats is not None:
+        tags["target_mean"] = float(target_stats["mean"])
+        tags["target_std"] = float(target_stats["std"])
     if cfg.logging.tags:
         tags.update(dict(cfg.logging.tags))
 
@@ -273,6 +281,7 @@ def run_experiment(cfg) -> RunResult:
         logger=logger,
         task=task,
         forward_takes_mask=artifacts.forward_takes_mask,
+        target_stats=getattr(artifacts.meta, "target_stats", None),
     )
     optim_cfg = _make_optim_config(cfg, lr=float((cfg.training.optimizer or {}).get("lr", 1e-3)))
     train_cfg = _make_train_config(cfg)
