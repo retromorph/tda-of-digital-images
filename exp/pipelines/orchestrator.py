@@ -145,10 +145,17 @@ def _build_overrides(cfg, task, method_name, method_cfg, seed):
         overrides.append(_to_override("logging.best_weights_artifact_path", bw_path))
 
     common = cfg.get("common_persistence", {}) or {}
+    if "filtration_name" in common:
+        overrides.append(_to_override("filtration.name", common["filtration_name"]))
+    if "filtration_args" in common and common["filtration_args"] is not None:
+        args = dict(common["filtration_args"])
+        if "eps" in common and "eps" not in args:
+            args["eps"] = common["eps"]
+        overrides.append(_to_override("filtration.args", args))
+    elif "eps" in common:
+        overrides.append(_to_override("filtration.args.eps", common["eps"]))
     if "idx" in common:
         overrides.append(_to_override("filtration.diagram_idx", common["idx"]))
-    if "eps" in common:
-        overrides.append(_to_override("filtration.args.eps", common["eps"]))
 
     if encoder_cfg is not None:
         overrides.append(_to_override("encoder.name", encoder_cfg["encoder_name"]))
