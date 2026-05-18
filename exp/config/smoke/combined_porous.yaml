@@ -1,0 +1,59 @@
+experiment: SmokeCombinedPorous
+
+seeds: [0]
+device: "mps"
+num_workers: 0
+
+strict_compute: false
+budget:
+  kind: seconds
+  value: 180
+  epochs_hint: 4
+
+common_persistence:
+  filtration_name: combined
+  filtration_args:
+    filtrations:
+      - name: pht_directional
+        args:
+          agg: add
+      - name: edt_sublevel
+        args:
+          binarize: otsu
+          pore_phase: dark
+          phase: pore
+          normalize: false
+  idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 100]
+  eps: 0.02
+
+logging:
+  save_best_weights: false
+
+tasks:
+  - name: porous2d_clean
+    dataset: POROUS2D-CLEAN
+    transform: null
+    power: 0.0
+
+methods:
+  latent_persformer:
+    args:
+      model: LATENT_PERSFORMER
+      d_model: 96
+      d_latents: 128
+      num_latents: 64
+      num_blocks: 1
+      num_self_attends_per_block: 2
+      num_self_attention_heads: 4
+      num_cross_attention_heads: 4
+      cross_attention_widening_factor: 1
+      self_attention_widening_factor: 1
+      dropout: 0.1
+      decoder_dropout: 0.1
+      decoder_hidden_dims: "128,64"
+      activation: GELU
+      lr: 0.0005
+      weight_decay: 0.0001
+      warmup_epochs: 1
+      eta_min: 0.00005
+      batch_size: 64

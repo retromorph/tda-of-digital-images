@@ -14,14 +14,40 @@ budget:
 logging:
   save_best_weights: true
 
+# common_persistence:
+#   filtration_name: pht_classical
+#   filtration_args:
+#     alphas: [0.0, 11.25, 22.5, 33.75, 45.0, 56.25, 67.5, 78.75,
+#              90.0, 101.25, 112.5, 123.75, 135.0, 146.25, 157.5, 168.75]
+#     binarize: otsu
+#     pore_phase: dark
+#   idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+#   eps: 0.02
+
+# common_persistence:
+#   filtration_name: edt_sublevel
+#   filtration_args:
+#     binarize: otsu
+#     pore_phase: dark
+#     phase: pore
+#     normalize: false
+#   idx: [0]
+#   eps: 0.0
+
 common_persistence:
-  filtration_name: pht_classical
+  filtration_name: combined
   filtration_args:
-    alphas: [0.0, 11.25, 22.5, 33.75, 45.0, 56.25, 67.5, 78.75,
-             90.0, 101.25, 112.5, 123.75, 135.0, 146.25, 157.5, 168.75]
-    binarize: otsu
-    pore_phase: dark
-  idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    filtrations:
+      - name: pht_directional
+        args:
+          agg: add
+      - name: edt_sublevel
+        args:
+          binarize: otsu
+          pore_phase: dark
+          phase: pore
+          normalize: false
+  idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 100]
   eps: 0.02
 
 tasks:

@@ -140,3 +140,19 @@ uv run mlflow server \
 - 2025 CoREMOF — https://zenodo.org/records/15621349
 - 2D-porous-media-images — https://github.com/gengshaoyang/2D-porous-media-images
 - MedMNIST / Torchvision MNIST family / NIST SD04 — собираются по `src/datasets/sources/*.py`
+
+```
+git clone https://github.com/retromorph/tda-of-digital-images.git
+cd tda-of-digital-images/
+git checkout fix-exps
+mkdir data
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source $HOME/.local/bin/env
+uv python pin 3.12
+uv sync
+tmux new -s mlflow # запустить команду выше, потом Ctrl+B, D, заново подключиться tmux attach -t mlflow
+uv run mlflow server   --backend-store-uri sqlite:///mlruns/mlflow.db   --default-artifact-root file:./mlruns/artifacts   --host 0.0.0.0   --port 5000 --allowed-hosts "*" --cors-allowed-origins "*"
+sudo ufw allow 5000/tcp
+sudo ufw allow 22/tcp
+sudo ufw enable
+```
