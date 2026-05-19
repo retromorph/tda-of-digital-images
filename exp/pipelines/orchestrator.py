@@ -347,6 +347,19 @@ def run(cfg_path=None, *, cfg_dict=None, dry_run=False, only_method=None, only_t
             proc = subprocess.run(cmd, cwd=str(ROOT), check=False)
             code = proc.returncode
         elapsed = time.time() - started
+        if code != 0:
+            print(
+                "  !! child exited with code {} in {:.1f}s (method={}, task={}, seed={}). "
+                "Re-run the printed command above by hand to see the error.".format(
+                    code, elapsed, method_name, task["name"], seed
+                ),
+                flush=True,
+            )
+        elif elapsed < 5.0:
+            print(
+                "  ?? child finished suspiciously fast in {:.2f}s — likely silent failure".format(elapsed),
+                flush=True,
+            )
 
         manifest.append(
             {
