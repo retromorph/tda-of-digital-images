@@ -152,8 +152,9 @@ def get_image_dataset(cfg: ImageDatasetConfig):
     loader = DATASETS.get(cfg.dataset_str)()
     dataset_train_val_raw, dataset_test_raw, meta = loader(cfg.seed, cfg.fractions)
 
-    n_train = int(len(dataset_train_val_raw) * f_train)
-    random_idx = torch.randperm(len(dataset_train_val_raw), generator=torch.Generator().manual_seed(cfg.seed))
+    n_total = len(dataset_train_val_raw.data)
+    n_train = int(n_total * f_train)
+    random_idx = torch.randperm(n_total, generator=torch.Generator().manual_seed(cfg.seed))
 
     train_val_images = _prepare_images(dataset_train_val_raw.data, meta)
     test_images = _prepare_images(dataset_test_raw.data, meta)

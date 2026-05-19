@@ -35,20 +35,28 @@ logging:
 #   eps: 0.0
 
 common_persistence:
-  filtration_name: combined
-  filtration_args:
-    filtrations:
-      - name: pht_directional
-        args:
-          agg: add
-      - name: edt_sublevel
-        args:
-          binarize: otsu
-          pore_phase: dark
-          phase: pore
-          normalize: false
-  idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 100]
+  filtration_name: pht_directional
+  filtrations_args:
+    agg: add
+  idx: [0, 2, 4, 6, 7, 9, 11, 13, 16]
   eps: 0.02
+
+
+# common_persistence:
+#   filtration_name: combined
+#   filtration_args:
+    # filtrations:
+    #   - name: pht_directional
+    #     args:
+    #       agg: add
+#       - name: edt_sublevel
+#         args:
+#           binarize: otsu
+#           pore_phase: dark
+#           phase: pore
+#           normalize: false
+#   idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 100]
+#   eps: 0.02
 
 tasks:
   - name: porous2d_clean
@@ -59,6 +67,14 @@ tasks:
       kind: seconds
       value: 1200
       epochs_hint: 60
+  - name: organamnist_clean
+    dataset: OrganAMNIST
+    transform: null
+    power: 0.0
+  - name: nist_sd04_clean
+    dataset: NIST-SD04
+    transform: null
+    power: 0.0
 
 methods:
   persistent_image:
