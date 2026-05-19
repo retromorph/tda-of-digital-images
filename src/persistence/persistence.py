@@ -27,8 +27,11 @@ def pht(image, image_base=None, pos=None, eps=None):
 
 
 def sublevel_persistence(image, eps=None, pos=None, inf="max", sort="birth"):
-    if len(image.shape) != 3:
-        raise ValueError("Image tensor dimensions should be (channel, width, height).")
+    if image.dim() not in (3, 4):
+        raise ValueError(
+            "Image tensor must be (C, H, W) for 2D or (C, D, H, W) for 3D, "
+            f"got shape {tuple(image.shape)}."
+        )
 
     diagrams = []
     persistence = lambda x: x[:, 1] - x[:, 0]

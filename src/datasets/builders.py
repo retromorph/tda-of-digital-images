@@ -86,6 +86,9 @@ def _get_targets_tensor(dataset):
 def _prepare_images(raw_images, meta):
     images = torch.as_tensor(raw_images)
 
+    if len(meta.image_size) == 3:
+        return _prepare_images_3d(images, meta)
+
     target_h, target_w = tuple(meta.image_size)
 
     if images.ndim == 3:
@@ -110,6 +113,30 @@ def _prepare_images(raw_images, meta):
         images = images.repeat(1, 3, 1, 1)
     if images.shape[-2:] != (target_h, target_w):
         images = F.interpolate(images.float(), size=(target_h, target_w), mode="bilinear", align_corners=False)
+
+    return images
+
+
+def _prepare_images_3d(images, meta):
+    target_d, target_h, target_w = tuple(meta.image_size)
+
+    if images.ndim == 4:
+        # (N, D, H, W) -> add channel dim
+        images = images.unsqueeze(1).float()
+    elif images.ndim == 5:
+        if images.shape[1] == 1:
+            images = images.float()
+        elif images.shape[-1] == 1:
+            images = images.permute(0, 4, 1, 2, 3).float()
+        else:
+            raise ValueError(f"Unsupported 5D volume tensor shape: {tuple(images.shape)}")
+    else:
+        raise ValueError(f"Unsupported volume tensor shape: {tuple(images.shape)}")
+
+    if images.shape[-3:] != (target_d, target_h, target_w):
+        images = F.interpolate(
+            images, size=(target_d, target_h, target_w), mode="trilinear", align_corners=False
+        )
 
     return images
 

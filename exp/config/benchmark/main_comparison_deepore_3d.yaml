@@ -1,6 +1,5 @@
-experiment: MainPhtClassical
+experiment: MainDeePore3D
 
-# seeds: [0, 1, 2]
 seeds: [0]
 device: "mps"
 num_workers: 2
@@ -8,73 +7,32 @@ num_workers: 2
 strict_compute: true
 budget:
   kind: seconds
-  value: 600
+  value: 1800
   epochs_hint: 60
 
 logging:
   save_best_weights: true
 
-# common_persistence:
-#   filtration_name: pht_classical
-#   filtration_args:
-#     alphas: [0.0, 11.25, 22.5, 33.75, 45.0, 56.25, 67.5, 78.75,
-#              90.0, 101.25, 112.5, 123.75, 135.0, 146.25, 157.5, 168.75]
-#     binarize: otsu
-#     pore_phase: dark
-#   idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-#   eps: 0.02
-
-# common_persistence:
-#   filtration_name: edt_sublevel
-#   filtration_args:
-#     binarize: otsu
-#     pore_phase: dark
-#     phase: pore
-#     normalize: false
-#   idx: [0]
-#   eps: 0.0
-
 common_persistence:
-  filtration_name: pht_directional
-  filtrations_args:
-    agg: add
-  idx: [0, 2, 4, 6, 7, 9, 11, 13, 16]
-  eps: 0.02
-
-
-# common_persistence:
-#   filtration_name: combined
-#   filtration_args:
-#     filtrations:
-#       - name: pht_directional
-#         args:
-#           agg: add
-#       - name: edt_sublevel
-#         args:
-#           binarize: otsu
-#           pore_phase: dark
-#           phase: pore
-#           normalize: false
-#   idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 100]
-#   eps: 0.02
+  filtration_name: edt_sublevel
+  filtration_args:
+    ndim: 3
+    binarize: otsu
+    pore_phase: dark
+    phase: pore
+    normalize: true
+  idx: [0, 1, 2]
+  eps: 0.0
 
 tasks:
-  - name: porous2d_clean
-    dataset: POROUS2D-CLEAN
+  - name: deepore_3d
+    dataset: DEEPORE-3D
     transform: null
     power: 0.0
     budget:
       kind: seconds
-      value: 1200
+      value: 1800
       epochs_hint: 60
-  - name: organamnist_clean
-    dataset: OrganAMNIST
-    transform: null
-    power: 0.0
-  - name: nist_sd04_clean
-    dataset: NIST-SD04
-    transform: null
-    power: 0.0
 
 methods:
   persistent_image:
@@ -86,7 +44,7 @@ methods:
       base_channels: 16
       dropout: 0.1
       lr: 0.0003
-      batch_size: 128
+      batch_size: 64
 
   persistent_landscape:
     args:
@@ -95,7 +53,7 @@ methods:
       base_channels: 16
       dropout: 0.1
       lr: 0.0003
-      batch_size: 128
+      batch_size: 64
 
   persistent_silhouette:
     args:
@@ -105,7 +63,7 @@ methods:
       base_channels: 16
       dropout: 0.1
       lr: 0.0003
-      batch_size: 128
+      batch_size: 64
 
   deepsets:
     args:
@@ -116,7 +74,7 @@ methods:
       activation: GELU
       alpha: 0.0
       lr: 0.0001
-      batch_size: 128
+      batch_size: 64
 
   persformer:
     args:
@@ -137,7 +95,7 @@ methods:
       weight_decay: 0.0001
       warmup_epochs: 5
       eta_min: 0.000001
-      batch_size: 64
+      batch_size: 32
 
   linear_persformer:
     args:
@@ -156,7 +114,7 @@ methods:
       weight_decay: 0.0001
       warmup_epochs: 5
       eta_min: 0.000001
-      batch_size: 64
+      batch_size: 32
 
   latent_persformer:
     args:
@@ -178,4 +136,4 @@ methods:
       weight_decay: 0.0001
       warmup_epochs: 5
       eta_min: 0.000001
-      batch_size: 64
+      batch_size: 32

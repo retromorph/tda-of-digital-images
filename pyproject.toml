@@ -33,6 +33,7 @@ dependencies = [
     "porespy",
     "medmnist>=3.0.2",
     "omegaconf",
+    "h5py",
 ]
 
 [project.optional-dependencies]

@@ -28,9 +28,12 @@ def edt_sublevel(params=None):
     eps = cfg.get("eps")
     normalize = cfg.get("normalize", False)
     phase = cfg.get("phase", "pore")  # "pore" | "matrix" | "both"
+    ndim = int(cfg.get("ndim", 2))
 
     if phase not in ("pore", "matrix", "both"):
         raise ValueError(f"phase must be 'pore', 'matrix', or 'both', got {phase!r}")
+    if ndim not in (2, 3):
+        raise ValueError(f"ndim must be 2 or 3, got {ndim}")
 
     def _channel(mask_np: np.ndarray, normalize_value: float) -> np.ndarray:
         edt = distance_transform_edt(mask_np).astype(np.float32)
@@ -41,17 +44,26 @@ def edt_sublevel(params=None):
         return -edt
 
     def apply(image):
-        if image.dim() == 2:
-            img2d = image
-        elif image.dim() == 3:
-            img2d = image[0]
+        if ndim == 2:
+            if image.dim() == 2:
+                img = image
+            elif image.dim() == 3 and image.shape[0] == 1:
+                img = image[0]
+            else:
+                raise ValueError(
+                    f"edt_sublevel(ndim=2) expects (H, W) or (1, H, W), got {tuple(image.shape)}"
+                )
         else:
-            raise ValueError(
-                f"edt_sublevel expects (H, W) or (1, H, W), got {tuple(image.shape)}"
-            )
-        mask = _binary_mask(img2d, binarize, pore_phase).numpy()
-        H, W = mask.shape
-        diag_px = float(np.hypot(H, W))
+            if image.dim() == 3:
+                img = image
+            elif image.dim() == 4 and image.shape[0] == 1:
+                img = image[0]
+            else:
+                raise ValueError(
+                    f"edt_sublevel(ndim=3) expects (D, H, W) or (1, D, H, W), got {tuple(image.shape)}"
+                )
+        mask = _binary_mask(img, binarize, pore_phase).numpy()
+        diag_px = float(np.sqrt(sum(s * s for s in mask.shape)))
 
         channels = []
         if phase in ("pore", "both"):
