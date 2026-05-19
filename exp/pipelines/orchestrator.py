@@ -177,6 +177,8 @@ def _budget_overrides(cfg, task, raw_args):
         ]
         if effective.get("epochs_hint") is not None:
             parts.append(_to_override("training.budget.epochs_hint", effective["epochs_hint"]))
+        if effective.get("snapshots") is not None:
+            parts.append(_to_override("training.budget.snapshots", effective["snapshots"]))
         return parts
     return [_to_override("training.budget.value", raw_args.get("epochs", 10))]
 

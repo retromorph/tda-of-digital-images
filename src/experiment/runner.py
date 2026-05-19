@@ -204,6 +204,10 @@ def _make_train_config(cfg) -> TrainConfig:
     early = cfg.training.early_stop
     log_cfg = cfg.logging
     bw_path = getattr(log_cfg, "best_weights_artifact_path", None) or "weights/best.pt"
+    snapshots_raw = getattr(budget_cfg, "snapshots", None)
+    snapshots: list[int] | None = None
+    if snapshots_raw is not None:
+        snapshots = [int(s) for s in snapshots_raw]
     return TrainConfig(
         epochs=n_epochs,
         budget_kind=kind,
@@ -216,6 +220,7 @@ def _make_train_config(cfg) -> TrainConfig:
         early_stop_min_delta=float(early.min_delta),
         save_best_weights=bool(getattr(log_cfg, "save_best_weights", False)),
         best_weights_artifact_path=str(bw_path),
+        budget_snapshots=snapshots,
     )
 
 

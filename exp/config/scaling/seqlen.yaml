@@ -1,0 +1,21 @@
+# Sequence-length scaling sweep (M1, Series 1.1).
+#
+# Run:
+#   uv run python -m exp.pipelines.scaling_seqlen --config exp/config/scaling/seqlen.yaml
+#
+# On Mac MPS / CPU you'll want to drop max N — Persformer will OOM around 4096 on
+# a 24GB GPU at batch_size=8. Use --N <single value> for ad-hoc points.
+
+device: cuda
+batch_size: 8
+warmup: 3
+reps: 10
+output: results/scaling_seqlen.csv
+
+methods:
+  - PERSFORMER
+  - LINEAR_PERSFORMER
+  - LATENT_PERSFORMER
+  - PHTS
+
+N: [64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384]

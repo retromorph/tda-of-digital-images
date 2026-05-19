@@ -43,6 +43,9 @@ class BudgetConfig:
     kind: str = "epochs"          # "epochs" | "steps" | "seconds"
     value: int = 10                # epochs / global optimizer steps / wall-clock seconds
     epochs_hint: int | None = None # scheduler horizon + outer-loop cap for non-epoch budgets
+    # Wallclock Pareto snapshots in seconds (requires kind="seconds"). Each boundary
+    # triggers a test eval and logs with fixed MLflow keys ``*_at_budget_{1..N}``.
+    snapshots: list[int] | None = None
 
 
 @dataclass

@@ -1,0 +1,79 @@
+# Classical persistence-encoder baselines for Appendix A (M13).
+# Run via orchestrator directly:
+#   uv run python -m exp.pipelines.orchestrator --config exp/config/benchmark/appendix_classical.yaml
+
+experiment: Appendix/Classical
+
+device: cuda
+num_workers: 0
+
+seeds: [42, 43, 44]
+
+budget:
+  kind: epochs
+  value: 100
+  epochs_hint: 100
+
+common_persistence:
+  filtration_name: edt_sublevel
+  filtration_args:
+    binarize: otsu
+    pore_phase: dark
+    phase: pore
+    normalize: false
+    ndim: 3
+  idx: [0]
+  eps: 0.0
+
+logging:
+  save_best_weights: false
+
+tasks:
+  - name: deepore_3d
+    dataset: DEEPORE-3D
+    transform: null
+    power: 0.0
+  - name: porespy_3d
+    dataset: PORESPY-3D
+    transform: null
+    power: 0.0
+
+methods:
+  persistent_image:
+    args:
+      resolution: 64
+      sigma2: 0.01
+      weighting: persistence
+      weight_power: 1.0
+      d_model: 64
+      lr: 0.001
+      weight_decay: 0.0001
+      warmup_epochs: 1
+      eta_min: 0.01
+      batch_size: 32
+      early_stop_patience: 20
+
+  persistent_landscape:
+    args:
+      num_layers: 5
+      resolution: 256
+      d_model: 64
+      lr: 0.001
+      weight_decay: 0.0001
+      warmup_epochs: 1
+      eta_min: 0.01
+      batch_size: 32
+      early_stop_patience: 20
+
+  persistent_silhouette:
+    args:
+      resolution: 256
+      weighting: persistence
+      weight_power: 1.0
+      d_model: 64
+      lr: 0.001
+      weight_decay: 0.0001
+      warmup_epochs: 1
+      eta_min: 0.01
+      batch_size: 32
+      early_stop_patience: 20

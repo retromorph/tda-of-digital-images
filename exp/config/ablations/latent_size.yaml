@@ -1,0 +1,53 @@
+# num_latents ablation for LatentPersformer (M8).
+# Run: uv run python -m exp.pipelines.ablations.latent_size
+
+experiment: Ablation/LatentSize
+
+device: cuda
+num_workers: 0
+
+seeds: [42, 43, 44, 45, 46]
+datasets: [DEEPORE-3D, PORESPY-3D]
+
+num_latents: [4, 8, 16, 32, 64, 128, 256, 512]
+
+budget:
+  kind: seconds
+  value: 1500           # 25 min per run
+  epochs_hint: 30
+
+common_persistence:
+  filtration_name: edt_sublevel
+  filtration_args:
+    binarize: otsu
+    pore_phase: dark
+    phase: pore
+    normalize: false
+    ndim: 3
+  idx: [0]
+  eps: 0.0
+
+logging:
+  save_best_weights: false
+
+methods:
+  latent_persformer:
+    args:
+      model: LATENT_PERSFORMER
+      d_model: 128
+      d_latents: 256
+      num_blocks: 1
+      num_self_attends_per_block: 4
+      num_self_attention_heads: 8
+      num_cross_attention_heads: 8
+      cross_attention_widening_factor: 1
+      self_attention_widening_factor: 1
+      dropout: 0.1
+      decoder_dropout: 0.2
+      activation: GELU
+      pooling: attn
+      warmup_epochs: 1
+      eta_min: 0.01
+      batch_size: 32
+      lr: 0.0003          # REPLACE from best_hp.yaml after M6
+      weight_decay: 0.0

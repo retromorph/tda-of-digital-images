@@ -1,0 +1,96 @@
+# HP search (M6): tune lr × wd per method on D1=DEEPORE-3D, seed=42 only.
+# Best HP is then frozen and reused on D3 in the main 3D comparison (M7).
+#
+# Run: uv run python -m exp.pipelines.hp_search
+
+experiment: HpSearch/Main3D
+
+device: "cuda"  # override to "mps" / "cpu" if needed via env or sub-config
+num_workers: 0
+
+seeds: [42]
+datasets: [DEEPORE-3D]
+
+lr_grid: [0.0001, 0.0003, 0.001]
+wd_grid: [0.0, 0.0001]
+
+budget:
+  kind: seconds
+  value: 1200          # 20 min per run, enough to compare convergence trends
+  epochs_hint: 30
+
+common_persistence:
+  filtration_name: edt_sublevel
+  filtration_args:
+    binarize: otsu
+    pore_phase: dark
+    phase: pore
+    normalize: false
+    ndim: 3
+  idx: [0]
+  eps: 0.0
+
+logging:
+  save_best_weights: false
+
+output: exp/config/hp_search/best_hp.yaml
+
+methods:
+  persformer:
+    args:
+      model: PERSFORMER
+      d_model: 128
+      d_hidden: 512
+      num_layers: 4
+      num_heads: 8
+      encoder_dropout: 0.0
+      decoder_dropout: 0.2
+      activation: GELU
+      warmup_epochs: 1
+      eta_min: 0.01
+      batch_size: 32
+
+  latent_persformer:
+    args:
+      model: LATENT_PERSFORMER
+      d_model: 128
+      d_latents: 256
+      num_latents: 64
+      num_blocks: 1
+      num_self_attends_per_block: 4
+      num_self_attention_heads: 8
+      num_cross_attention_heads: 8
+      cross_attention_widening_factor: 1
+      self_attention_widening_factor: 1
+      dropout: 0.1
+      decoder_dropout: 0.2
+      activation: GELU
+      pooling: attn
+      warmup_epochs: 1
+      eta_min: 0.01
+      batch_size: 32
+
+  linear_persformer:
+    args:
+      model: LINEAR_PERSFORMER
+      d_model: 128
+      d_hidden: 512
+      num_layers: 4
+      num_heads: 8
+      encoder_dropout: 0.0
+      decoder_dropout: 0.2
+      activation: GELU
+      warmup_epochs: 1
+      eta_min: 0.01
+      batch_size: 32
+
+  deepsets:
+    args:
+      model: PHTS
+      d_model: 128
+      d_hidden: 256
+      dropout: 0.1
+      activation: GELU
+      warmup_epochs: 1
+      eta_min: 0.01
+      batch_size: 32

@@ -34,6 +34,10 @@ class TrainConfig:
     early_stop_min_delta: float = 0.0
     save_best_weights: bool = False
     best_weights_artifact_path: str = "weights/best.pt"
+    # Wallclock-budget Pareto snapshots (seconds). Fires test eval at each boundary
+    # and logs with fixed MLflow keys ``*_at_budget_{1..N}``. Requires budget_kind="seconds".
+    # Pair with scheduler=none to avoid LR-schedule confounders.
+    budget_snapshots: list[int] | None = None
 
 
 class Trainer:
@@ -141,6 +145,8 @@ class Trainer:
             self.optimizer.step()
             self.optimizer.zero_grad(set_to_none=True)
             self._global_step += 1
+            if self._budget_kind == "seconds":
+                self._maybe_fire_snapshots()
             if self._budget_kind == "steps" and self._global_step >= self._budget_value:
                 self._budget_reached = True
             elif self._budget_kind == "seconds" and (time.monotonic() - self._budget_started_at) >= self._budget_value:
@@ -167,6 +173,65 @@ class Trainer:
             _flush()
         self._update_throughput("train", samples_seen, time.monotonic() - epoch_start)
         self.history[stage].append(fmean(loss_batches) if loss_batches else float("nan"))
+
+    def _eval_pass(self, dataloader, *, with_metrics: bool) -> dict:
+        """Side-effect-free eval pass; returns metrics dict, does NOT touch history."""
+        loss_batches: list[float] = []
+        metrics_batches: list[dict] = []
+        was_training = self.model.training
+        self.model.eval()
+        with torch.no_grad():
+            for batch in dataloader:
+                x, mask, y = self._unpack_batch(batch)
+                y_hat = self._forward(x, mask)
+                if self.task == "regression":
+                    y_hat, y = self._prepare_regression_targets(y_hat, y)
+                loss = self.loss_fn(y_hat, y)
+                loss_batches.append(float(loss.detach().cpu().item()))
+                if with_metrics:
+                    if self.task == "regression":
+                        metrics_batches.append(self._regression_metrics(y_hat, y))
+                    else:
+                        metrics_batches.append(self._classification_metrics(y_hat, y))
+        if was_training:
+            self.model.train()
+        out: dict = {"loss": fmean(loss_batches) if loss_batches else float("nan")}
+        if with_metrics:
+            if self.task == "regression":
+                for k in ("rmse", "mae", "r2"):
+                    out[k] = fmean([m[k] for m in metrics_batches]) if metrics_batches else float("nan")
+            else:
+                out["acc"] = fmean([m["acc"] for m in metrics_batches]) if metrics_batches else float("nan")
+        return out
+
+    def _maybe_fire_snapshots(self) -> None:
+        """If the current wallclock has crossed any pending snapshot boundary, run eval and log."""
+        if not self._snapshot_targets:
+            return
+        elapsed = time.monotonic() - self._budget_started_at
+        while self._snapshot_next_idx < len(self._snapshot_targets) and elapsed >= self._snapshot_targets[self._snapshot_next_idx]:
+            slot = self._snapshot_next_idx + 1  # 1-indexed for MLflow keys
+            val_metrics = self._eval_pass(self._snapshot_val_loader, with_metrics=False)
+            test_metrics = self._eval_pass(self._snapshot_test_loader, with_metrics=True)
+            payload = {
+                f"loss_val_at_budget_{slot}": val_metrics["loss"],
+                f"loss_test_at_budget_{slot}": test_metrics["loss"],
+                f"elapsed_at_budget_{slot}": elapsed,
+                f"steps_at_budget_{slot}": float(self._global_step),
+            }
+            if self.task == "regression":
+                payload.update(
+                    {
+                        f"rmse_at_budget_{slot}": test_metrics["rmse"],
+                        f"mae_at_budget_{slot}": test_metrics["mae"],
+                        f"r2_at_budget_{slot}": test_metrics["r2"],
+                    }
+                )
+            else:
+                payload.update({f"acc_at_budget_{slot}": test_metrics["acc"]})
+            if self.logger is not None:
+                self.logger.log(payload, step=self._global_step)
+            self._snapshot_next_idx += 1
 
     def _eval_step(self, dataloader, stage):
         loss_batches = []
@@ -339,6 +404,26 @@ class Trainer:
         self._budget_started_at = time.monotonic()
         self._global_step = 0
         self._budget_reached = False
+
+        # Snapshot state for Pareto-curve logging at wallclock boundaries.
+        snapshots = train_config.budget_snapshots or []
+        if snapshots and train_config.budget_kind != "seconds":
+            raise ValueError("budget_snapshots requires budget.kind='seconds'.")
+        self._snapshot_targets = sorted(int(s) for s in snapshots)
+        for s in self._snapshot_targets:
+            if s > train_config.budget_value:
+                raise ValueError(
+                    f"budget_snapshot {s}s exceeds budget.value={train_config.budget_value}s; "
+                    "all snapshots must fire before the run ends."
+                )
+        self._snapshot_next_idx = 0
+        self._snapshot_val_loader = dataloader_val
+        self._snapshot_test_loader = dataloader_test
+        if self._snapshot_targets and self.logger is not None:
+            self.logger.log(
+                {f"budget_seconds_{i + 1}": float(s) for i, s in enumerate(self._snapshot_targets)},
+                step=0,
+            )
 
         self._build_optimizer(optim_config)
         self.model.to(self.device)
