@@ -180,15 +180,13 @@ def _build_encoded_from_registry(cfg, spec, model_kwargs, batch_size: int, num_w
 def _make_optim_config(cfg, lr: float) -> OptimConfig:
     optimizer_cfg = cfg.training.optimizer or {}
     scheduler_cfg = cfg.training.scheduler or {}
-    eta_min_raw = float(scheduler_cfg.get("eta_min", 0.0))
-    eta_min_ratio = (eta_min_raw / lr) if (lr > 0 and eta_min_raw > 0) else 0.0
     return OptimConfig(
         optimizer=str(optimizer_cfg.get("name", "adamw")),
         lr=lr,
         weight_decay=float(optimizer_cfg.get("weight_decay", 0.0)),
         scheduler=str(scheduler_cfg.get("name", "none")),
         warmup_epochs=int(scheduler_cfg.get("warmup_epochs", 0)),
-        eta_min=eta_min_ratio,
+        eta_min=float(scheduler_cfg.get("eta_min", 0.0)),
     )
 
 

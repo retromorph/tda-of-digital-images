@@ -47,7 +47,7 @@ methods:
       decoder_dropout: 0.2
       activation: GELU
       warmup_epochs: 1
-      eta_min: 0.01
+      eta_min: 1.0e-6
       batch_size: 32
 
   latent_persformer:
@@ -67,7 +67,7 @@ methods:
       activation: GELU
       pooling: attn
       warmup_epochs: 1
-      eta_min: 0.01
+      eta_min: 1.0e-6
       batch_size: 32
 
   linear_persformer:
@@ -81,7 +81,7 @@ methods:
       decoder_dropout: 0.2
       activation: GELU
       warmup_epochs: 1
-      eta_min: 0.01
+      eta_min: 1.0e-6
       batch_size: 32
 
   deepsets:
@@ -92,5 +92,5 @@ methods:
       dropout: 0.1
       activation: GELU
       warmup_epochs: 1
-      eta_min: 0.01
+      eta_min: 1.0e-6
       batch_size: 32

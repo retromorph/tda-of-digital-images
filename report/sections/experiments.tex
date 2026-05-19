@@ -1,0 +1,178 @@
+В этом разделе мы описываем сеттинг и ожидаемые результаты экспериментальной кампании, защищающей три центральных утверждения работы:
+\begin{description}
+    \item[\textbf{C1.}] \texttt{LatentPersformer} обеспечивает forward/backward time и память, асимптотически плоские по длине входной последовательности $M$, в отличие от \texttt{Persformer}, чья сложность квадратична по $M$.
+    \item[\textbf{C2.}] На задачах регрессии проницаемости 3D пористых сред \texttt{LatentPersformer} достигает качества, статистически неотличимого от \texttt{Persformer} при равном wallclock-бюджете, и доминирующего --- при ограниченных бюджетах.
+    \item[\textbf{C3.}] Внутренние латентные слоты \texttt{LatentPersformer} специализируются на интерпретируемых топологических и физических признаках пористой структуры, что отличает модель от чёрного ящика.
+\end{description}
+
+Эксперименты разделены на две серии. \emph{Серия 1} (§\ref{ssec:exp-scaling}--§\ref{ssec:exp-main}) посвящена C1 и C2, \emph{Серия 2} (§\ref{ssec:exp-numlatents}--§\ref{ssec:exp-umap}) --- C3 и внутренней структуре модели. Сопроводительная таблица предписанных бейзлайнов вынесена в приложение (§\ref{ssec:exp-classical}).
+
+\subsection{Постановка и протокол}
+\label{ssec:exp-setup}
+
+\paragraph{Датасеты.} В качестве задач мы используем два 3D-датасета пористых материалов:
+\begin{description}
+    \item[D1: \texttt{DeepOre-3D}.] Открытая база $\mu$CT-сканов реальных пористых сред~\cite{deepore-zenodo}, $64^3$ воксель, $\sim 500$ образцов после фильтрации некорректных целей. Цель регрессии --- $\log_{10}$ проницаемости.
+    \item[D3: \texttt{PoreSpy-3D} (синтетический).] $1\,000$ бинарных $64^3$ объёмов, сгенерированных \texttt{porespy.generators.blobs}~\cite{porespy} с порозностью $\phi \in [0.15, 0.55]$ и параметром \texttt{blobiness} $\in \{1, 2, 3\}$. Цель регрессии --- $\log_{10}$ проницаемости по приближению Козени--Кармана $k = \phi^3 / \bigl(180 \cdot (1-\phi)^2 \cdot S^2\bigr)$, где $S$ --- удельная поверхность. Синтетический датасет специально включён для контролируемых экспериментов §\ref{ssec:exp-probes}--§\ref{ssec:exp-umap}: для каждого образца предвычислены $10$ физических признаков, выступающих как probe-цели.
+\end{description}
+
+\paragraph{Фильтрация.} Для всех 3D-задач используется sublevel-фильтрация negative Euclidean distance transform (\texttt{edt\_sublevel}, $\texttt{ndim}=3$) на бинаризованной поровой фазе. Этот выбор стандартен для топологических признаков пористых материалов: $H_0$-точки соответствуют слиянию связных компонентов поровой фазы, $H_1$-точки --- закрывающимся петлям в поровой сети.
+
+\paragraph{Сравниваемые методы.} Основная таблица включает четыре обучаемых эмбеддинга:
+\begin{itemize}
+    \item \texttt{Persformer}~\cite{reinauerPersformerTransformerArchitecture2021};
+    \item \texttt{LatentPersformer} (наша модель, §3);
+    \item \texttt{LinearPersformer} --- вариант Persformer с заменой self-attention на Nystr{\"o}m-аппроксимацию~\cite{xiongNystromformer2021};
+    \item \texttt{DeepSets}~\cite{zaheerDeepSets2017}.
+\end{itemize}
+Предписанные методы (Persistence Image / Landscape / Silhouette + CNN/MLP-головы) отнесены в §\ref{ssec:exp-classical}.
+
+\paragraph{Протокол обучения.} На каждом $(\text{метод}, \text{датасет})$ запускается $5$ сидов $\{42, 43, 44, 45, 46\}$ с фиксированным train/val/test split'ом. Оптимизатор --- AdamW. Гиперпараметры подбираются один раз сеткой $\text{lr} \in \{10^{-4}, 3{\cdot}10^{-4}, 10^{-3}\}$, $\text{wd} \in \{0, 10^{-4}\}$ на D1, сид 42, и фиксируются для D3; это исключает per-dataset cherry-picking. Все запуски протоколируются через MLflow: метрики качества, число параметров, throughput (samples/s), пиковая GPU-память, $\text{FLOPs}/\text{sample}$.
+
+\paragraph{Режимы оценки.} Каждый запуск проводится в двух режимах:
+\begin{itemize}
+    \item \emph{convergence}: early-stop по val loss, $\text{patience}=20$, $\max\_\text{epochs}=200$. Цель --- честное конечное качество.
+    \item \emph{wallclock}: $\text{budget}=45$ минут, со снимками метрик в моменты $\{5, 15, 45\}$ минут (Pareto-кривая по compute).
+\end{itemize}
+В режиме wallclock LR-schedule зафиксирован (отключение cosine annealing), чтобы снимки в разные моменты не были смещены ходом schedule'а; это документируется в Methods.
+
+\paragraph{Стат.\,тесты.} Сравнение \texttt{LatentPersformer} против \texttt{Persformer} парируется по сидам с помощью парного критерия Wilcoxon signed-rank ($\alpha = 0.05$).
+
+\subsection{Серия 1.1: Масштабирование по длине последовательности}
+\label{ssec:exp-scaling}
+
+\paragraph{Сеттинг.} Мы хотим изолировать вычислительное преимущество \texttt{LatentPersformer} от вклада качества. Для этого мы синтезируем случайные диаграммы фиксированной длины $M$, прогоняем по ним forward и forward+backward проходы и измеряем wallclock и пиковую GPU-память. Параметры: $M \in \{64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384\}$, batch size $32$, по $100$ warmup + $1000$ замеряемых итераций на конфигурацию, фиксированная GPU. Сравниваемые методы: \texttt{Persformer}, \texttt{LinearPersformer}, \texttt{LatentPersformer}, \texttt{DeepSets}.
+
+\paragraph{Ожидаемый результат.} На log-log шкале \texttt{Persformer} ожидается линия с наклоном $\approx 2$ (квадратичная сложность) и резкий обрыв в OOM при $M \gtrsim 4096$. \texttt{LinearPersformer} даёт линию с наклоном $\approx 1$ (линейная по $M$). \texttt{LatentPersformer} ожидается ниже LinearPersformer (фиксированная стоимость self-attention над латентами, $\mathcal{O}(N \cdot M)$ только в cross-attention слое), с наклоном близким к $1$. \texttt{DeepSets} --- нижняя граница по стоимости, тоже наклон $\approx 1$. Этот эксперимент --- кратчайший путь к защите C1; он содержит главный график статьи.
+
+\begin{figure}[ht]
+\centering
+\fbox{\parbox{0.9\linewidth}{\centering [PLACEHOLDER: scaling\_seqlen.pdf]\\[0.3em]
+\textbf{Композитный график 2$\times$2.} По оси $X$ --- длина диаграммы $M$ (log-scale, $64$..$16384$). По оси $Y$: (top-left) forward time, ms/sample; (top-right) forward+backward time, ms/sample; (bottom-left) peak forward memory, MB; (bottom-right) peak training memory, MB. Каждая панель содержит четыре кривые: \texttt{Persformer} (квадратичная, обрыв OOM маркером $\times$), \texttt{LinearPersformer}, \texttt{LatentPersformer}, \texttt{DeepSets}. Маркеры error bar отражают $95\%$ bootstrap CI по $1000$ замерам.}}
+\caption{Масштабирование стоимости forward/backward по длине входной последовательности. \texttt{LatentPersformer} удерживает плоскую кривую вплоть до $M=16384$, тогда как \texttt{Persformer} вылетает по памяти.}
+\label{fig:scaling-seqlen}
+\end{figure}
+
+\subsection{Серия 1.2: Основное сравнение на 3D пористых датасетах}
+\label{ssec:exp-main}
+
+\paragraph{Сеттинг.} $4$ метода $\times$ $5$ сидов $\times$ $2$ датасета (D1, D3) $\times$ $2$ режима (convergence / wallclock) $= 80$ прогонов. Метрики регрессии: RMSE, MAE, $R^2$, всё в исходных единицах целевой переменной. Дополнительно фиксируются compute-метрики из §\ref{ssec:exp-setup}.
+
+\paragraph{Ожидаемый результат.} В \emph{режиме convergence} \texttt{LatentPersformer} даёт $R^2$, статистически неотличимый от \texttt{Persformer} (Wilcoxon $p > 0.05$ на обоих датасетах) --- защищает <<comparable quality>>. \texttt{LinearPersformer} ожидается заметно слабее (Nystr{\"o}m-аппроксимация теряет точность на средних $M$, а инпут здесь не настолько длинный, чтобы оправдать линейность). \texttt{DeepSets} занимает последнее место среди обучаемых из-за отсутствия попарных взаимодействий точек.
+
+В \emph{режиме wallclock} картина меняется в пользу \texttt{LatentPersformer}: при бюджете $5$ минут он уже близок к финальной точке, тогда как \texttt{Persformer} ещё далёк от сходимости. Pareto-кривая (рис.~\ref{fig:main-pareto}) --- защита C2.
+
+\begin{table}[ht]
+\centering
+\fbox{\parbox{0.92\linewidth}{\centering [PLACEHOLDER: Таблица --- main results, convergence mode]\\[0.3em]
+Колонки: \emph{Method}, \emph{Dataset} (D1, D3), \emph{Test RMSE} (mean $\pm$ std по 5 сидам), \emph{Test $R^2$}, \emph{Params (M)}, \emph{Peak GPU mem (MB)}, \emph{Throughput (samples/s)}, \emph{Wallclock-to-convergence (min)}. Под таблицей: пометки по результату Wilcoxon vs \texttt{Persformer} (n.s. / $p<0.05$ / $p<0.01$).}}
+\caption{Основное сравнение в режиме convergence: качество на 3D пористых регрессионных задачах.}
+\label{tab:main-convergence}
+\end{table}
+
+\begin{figure}[ht]
+\centering
+\fbox{\parbox{0.9\linewidth}{\centering [PLACEHOLDER: main\_pareto.pdf]\\[0.3em]
+\textbf{Pareto-кривая wallclock vs качество.} Две панели (по одной на D1, D3). Ось $X$ --- wallclock в минутах (log-scale, точки $\{5, 15, 45\}$). Ось $Y$ --- test $R^2$. Четыре кривые методов с error bars по сидам. Точка convergence (из табл.~\ref{tab:main-convergence}) отмечена пустым кружком в правой части графика. На каждой кривой текстовая аннотация модели и доли от convergence-качества.}}
+\caption{Pareto-фронт <<wallclock vs качество>>. \texttt{LatentPersformer} доминирует при ограниченных бюджетах compute'а.}
+\label{fig:main-pareto}
+\end{figure}
+
+\subsection{Серия 2.1: Ablation по числу латентов}
+\label{ssec:exp-numlatents}
+
+\paragraph{Сеттинг.} Варьируется размер латентного массива $N \in \{4, 8, 16, 32, 64, 128, 256, 512\}$, остальные гиперпараметры зафиксированы на лучших из §\ref{ssec:exp-main}. Прогоны: $8 \cdot 5 \cdot 2 = 80$ запусков на D1 и D3.
+
+\paragraph{Ожидаемый результат.} Кривая $N$ vs $R^2$ должна выходить на плато в диапазоне $N \in [32, 64]$ --- это указывает на компактную внутреннюю размерность задачи. Wallclock растёт линейно по $N$; пересечение этих двух кривых задаёт inflection point (<<sweet spot>>), который мы рекомендуем в качестве дефолта.
+
+\begin{figure}[ht]
+\centering
+\fbox{\parbox{0.9\linewidth}{\centering [PLACEHOLDER: latent\_size\_ablation.pdf]\\[0.3em]
+\textbf{Двухосный график:} ось $X$ --- $\log_2 N$, левая ось $Y$ --- test $R^2$ (сплошные линии с error bars, отдельно для D1 и D3), правая ось $Y$ --- wallclock-to-convergence в минутах (пунктирные линии). Аннотацией отмечен knee point, рекомендуемый как дефолт для статьи (ожидаемо $N \approx 32$--$64$).}}
+\caption{Ablation по числу латентов: качество и стоимость как функция $N$.}
+\label{fig:latent-ablation}
+\end{figure}
+
+\subsection{Серия 2.2: Архитектурные ablation'ы}
+\label{ssec:exp-arch}
+
+\paragraph{Сеттинг.} Три независимых среза, всё на D1, $3$ сида:
+\begin{enumerate}
+    \item \emph{Тип пулинга}: \texttt{mean} vs \texttt{attention-pool} с learnable query.
+    \item \emph{Размер латента} $d_L \in \{64, 128, 256\}$.
+    \item \emph{Глубина self-attention} (число self-attend слоёв на блок) $\in \{1, 2, 4\}$.
+\end{enumerate}
+
+\paragraph{Ожидаемый результат.} (i) Attention-pool $\geq$ mean-pool по $R^2$, и --- важнее --- обеспечивает стабильную идентичность латентных слотов между сэмплами, что необходимо для §\ref{ssec:exp-probes}. (ii) Зависимость от $d_L$ слабая (плато после $d_L=128$). (iii) Глубина $\geq 2$ даёт основную пользу; диминишинг при $\geq 4$.
+
+\begin{table}[ht]
+\centering
+\fbox{\parbox{0.85\linewidth}{\centering [PLACEHOLDER: Таблица --- arch ablations]\\[0.3em]
+Три суб-таблицы (pooling / $d_L$ / depth). В каждой: значение варьируемого параметра, test $R^2$ (mean $\pm$ std), $\Delta$ относительно базовой конфигурации, число параметров, wallclock.}}
+\caption{Архитектурные ablation'ы на D1.}
+\label{tab:arch-ablation}
+\end{table}
+
+\subsection{Серия 2.3: Линейные пробы на физические признаки}
+\label{ssec:exp-probes}
+
+\paragraph{Сеттинг.} Берём обученный на D3 \texttt{LatentPersformer} (лучший сид из §\ref{ssec:exp-main}, attention-pool), извлекаем pre-pool тензор латентов $Z \in \mathbb{R}^{N_\text{test} \times N \times d_L}$. Для каждого латента $\ell \in \{1, \dots, N\}$ и каждого из $10$ предвычисленных физических признаков $p$ из D3 фитим ridge regression $z_\ell \to p$ c 5-fold CV. Получаем матрицу $R^2$ размера $N \times 10$.
+
+Физические признаки: $\phi$ (порозность), $S$ (удельная поверхность), $\bar r$ (mean pore radius), $r_{\max}$ (max pore radius), $\beta_0$, $\beta_1$, $\chi$ (Эйлерова характеристика), $H_e^{(0)}$, $H_e^{(1)}$ (persistence entropy для $H_0$, $H_1$), $\sum \text{persistence}_{H_1}$. Первые семь --- неперсистентные дескрипторы, последние три --- топологические; последние выступают как sanity check ($R^2$ должен быть высоким).
+
+Контроли: пробинг (a) усреднённого pooled-вектора обученного \texttt{Persformer}, (b) случайно инициализированного \texttt{LatentPersformer} (никогда не обученного).
+
+\paragraph{Ожидаемый результат.} На обученной модели $R^2$ для $\phi$ ожидается $> 0.7$ как минимум на одном латенте (sanity); для $H_e^{(1)}$ и $\sum \text{persistence}_{H_1}$ --- сопоставимо. Для случайной инициализации $R^2 < 0.2$ по всем признакам. Главное визуальное наблюдение --- \emph{специализация} латентов: heatmap должен показать, что разные латенты <<отвечают>> за разные физические признаки. Sparsity-score (Gini coefficient по строкам $R^2$-матрицы) должен быть смещён в сторону высоких значений --- это и есть количественное доказательство интерпретируемости (C3).
+
+\begin{figure}[ht]
+\centering
+\fbox{\parbox{0.9\linewidth}{\centering [PLACEHOLDER: probe\_heatmap.pdf]\\[0.3em]
+\textbf{Композит из двух графиков.} Слева: heatmap $R^2$ размера $N \times 10$ (cells координаты <<латент, физический признак>>, цвет --- $R^2 \in [0, 1]$). Латенты упорядочены по dominant feature для удобства чтения. Справа: гистограмма sparsity-score по латентам (по обученной модели и по random init для сравнения). Под графиком --- 3 контрольные строки: \texttt{Persformer pooled}, \texttt{LatentPersformer trained}, \texttt{LatentPersformer random}, с средним $R^2$ по диагонали для каждого.}}
+\caption{Linear probes: какие физические признаки восстанавливаются из латентов.}
+\label{fig:probe-heatmap}
+\end{figure}
+
+\subsection{Серия 2.4: Визуализация cross-attention}
+\label{ssec:exp-crossattn}
+
+\paragraph{Сеттинг.} Для $8$ случайных образцов D3 прогоняем forward с активным \texttt{enable\_aux(True)} (см. §3) и извлекаем cross-attention веса $A \in \mathbb{R}^{H \times N \times M}$ (heads, latents, tokens). Усредняем по headам. Для каждой точки диаграммы $m$ определяем \emph{dominant latent} $\ell^*(m) = \arg\max_\ell A[\ell, m]$. Визуализируем диаграмму как scatter $(b, d)$ с цветовой кодировкой по $\ell^*(m)$.
+
+\paragraph{Ожидаемый результат.} Разные латенты должны привязываться к качественно разным регионам диаграммы: <<короткие $H_0$-точки около диагонали>>, <<длинные $H_1$-петли>>, точки разных гомологических размерностей. Это качественно подтверждает специализацию из §\ref{ssec:exp-probes}.
+
+\begin{figure}[ht]
+\centering
+\fbox{\parbox{0.9\linewidth}{\centering [PLACEHOLDER: cross\_attn\_grid.pdf]\\[0.3em]
+\textbf{Сетка $2 \times 4$ из 8 sub-panel'ей.} В каждой sub-panel: scatter persistence diagram (ось $X$ --- birth, ось $Y$ --- death), точки покрашены по dominant latent (категориальная палитра). Над каждой panel'ью --- индекс семпла и его порозность $\phi$. Внизу композит --- общая легенда: для top-3 specialized латентов из §\ref{ssec:exp-probes} мини-гистограммы распределения $(b, d)$ точек, к которым они приклеиваются.}}
+\caption{Cross-attention визуализация: латенты специализируются на разных регионах диаграммы.}
+\label{fig:cross-attn}
+\end{figure}
+
+\subsection{Серия 2.5: Структура латентного пространства}
+\label{ssec:exp-umap}
+
+\paragraph{Сеттинг.} Извлекаем pooled latent $z \in \mathbb{R}^{d_L}$ для всех образцов D3-test, прогоняем UMAP ($\text{n\_neighbors}=30$, $\text{min\_dist}=0.1$). Получаем 2D-вложение, красим по порозности $\phi$.
+
+\paragraph{Ожидаемый результат.} Если латенты семантически осмысленны, UMAP-вложение должно демонстрировать монотонную раскраску вдоль одной оси: $|\rho_\text{Spearman}(\text{UMAP}_1, \phi)| > 0.5$. Это качественно подтверждает, что глобальная организация latent-пространства соответствует физически осмысленной координате. Отсутствие монотонности --- честный negative result, который мы готовы зарепортить.
+
+\begin{figure}[ht]
+\centering
+\fbox{\parbox{0.9\linewidth}{\centering [PLACEHOLDER: umap\_latents.pdf]\\[0.3em]
+\textbf{Scatter 2D UMAP-вложения латентов D3-test.} Каждая точка --- один образец. Цвет --- порозность $\phi$ (continuous colormap, viridis). Подписи к осям: UMAP-1, UMAP-2. В правом верхнем углу --- значение $\rho_\text{Spearman}(\text{UMAP}_1, \phi)$. Опционально: бок-о-бок та же фигура для random-init модели, чтобы показать отсутствие структуры в контроле.}}
+\caption{UMAP-вложение латентного пространства, окрашенное по порозности.}
+\label{fig:umap}
+\end{figure}
+
+\subsection{Приложение A: Сравнение с предписанными бейзлайнами}
+\label{ssec:exp-classical}
+
+\paragraph{Сеттинг.} $3$ метода (Persistence Image, Persistence Landscape, Persistence Silhouette) $\times$ $3$ сида $\times$ $2$ датасета (D1, D3) с фиксированными гиперпараметрами дискретизации ($n=64$ ячеек / уровней) и небольшим CNN-/MLP-классификатором сверху, обученным до сходимости.
+
+\paragraph{Ожидаемый результат.} Предписанные эмбеддинги обеспечивают сильную <<классическую>> точку отсчёта. Из работ по 3D пористым средам известно, что Persistence Image даёт компетитивный $R^2$, но уступает обучаемым эмбеддингам по верхней границе качества. Мы ожидаем, что Persformer и LatentPersformer обходят все три предписанных метода в режиме convergence, но в режиме wallclock-5min классические методы могут быть конкурентоспособны на D1 (меньшее обучаемых параметров $\to$ быстрая сходимость).
+
+\begin{table}[ht]
+\centering
+\fbox{\parbox{0.85\linewidth}{\centering [PLACEHOLDER: Таблица --- classical baselines]\\[0.3em]
+Колонки: \emph{Method} (PI/PL/PS), \emph{Dataset} (D1, D3), \emph{Test RMSE}, \emph{Test $R^2$}, \emph{Params (M)} (только головы), \emph{Wallclock-to-convergence}. Сравнение с строкой \texttt{LatentPersformer} из табл.~\ref{tab:main-convergence} в виде $\Delta R^2$.}}
+\caption{Предписанные эмбеддинги: расширение основной таблицы для приложения.}
+\label{tab:classical}
+\end{table}

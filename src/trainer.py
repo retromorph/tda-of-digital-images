@@ -18,7 +18,7 @@ class OptimConfig:
     weight_decay: float = 0.0
     scheduler: str = "none"  # none | cosine | warmup_cosine
     warmup_epochs: int = 0
-    eta_min: float = 0.0  # ratio min_lr / peak_lr
+    eta_min: float = 0.0  # absolute lower bound for lr (PyTorch CosineAnnealingLR semantics)
 
 
 @dataclass
@@ -274,7 +274,7 @@ class Trainer:
         scheduler_name = cfg.scheduler.lower()
         if scheduler_name == "none":
             return None
-        eta_min_abs = cfg.lr * float(cfg.eta_min)
+        eta_min_abs = float(cfg.eta_min)
         if scheduler_name == "cosine":
             return torch.optim.lr_scheduler.CosineAnnealingLR(
                 self.optimizer,

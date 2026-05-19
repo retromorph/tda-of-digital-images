@@ -42,7 +42,7 @@ methods:
       decoder_dropout: 0.2
       activation: GELU
       warmup_epochs: 1
-      eta_min: 0.01
+      eta_min: 1.0e-6
       batch_size: 32
       lr: 0.0003          # REPLACE from best_hp.yaml after M6
       weight_decay: 0.0   # REPLACE from best_hp.yaml after M6
@@ -64,7 +64,7 @@ methods:
       activation: GELU
       pooling: attn
       warmup_epochs: 1
-      eta_min: 0.01
+      eta_min: 1.0e-6
       batch_size: 32
       lr: 0.0003
       weight_decay: 0.0
@@ -80,7 +80,7 @@ methods:
       decoder_dropout: 0.2
       activation: GELU
       warmup_epochs: 1
-      eta_min: 0.01
+      eta_min: 1.0e-6
       batch_size: 32
       lr: 0.0003
       weight_decay: 0.0
@@ -93,7 +93,7 @@ methods:
       dropout: 0.1
       activation: GELU
       warmup_epochs: 1
-      eta_min: 0.01
+      eta_min: 1.0e-6
       batch_size: 32
       lr: 0.001
       weight_decay: 0.0
