@@ -63,6 +63,10 @@ class Trainer:
         }
         self.loss_fn = self._build_loss_fn(task)
         self.optimizer = None
+        # Throughput tracking (samples/sec) per stage, with EMA smoothing.
+        self._throughput_ema_alpha = 0.9
+        self._throughput_ema = {"train": None, "eval": None}
+        self._latest_throughput = {"train": None, "eval": None}
 
     @staticmethod
     def _build_loss_fn(task):
@@ -113,6 +117,19 @@ class Trainer:
             "r2": float(r2.detach().cpu().item()),
         }
 
+    def _update_throughput(self, stage_key: str, samples: int, elapsed_s: float) -> None:
+        """Record per-epoch throughput (samples/sec) and update its EMA."""
+        if samples <= 0 or elapsed_s <= 0:
+            return
+        latest = samples / elapsed_s
+        self._latest_throughput[stage_key] = latest
+        prev = self._throughput_ema[stage_key]
+        if prev is None:
+            self._throughput_ema[stage_key] = latest
+        else:
+            alpha = self._throughput_ema_alpha
+            self._throughput_ema[stage_key] = alpha * prev + (1.0 - alpha) * latest
+
     def _train_step(self, dataloader, train_cfg: TrainConfig, stage):
         loss_batches = []
         accum = max(1, int(train_cfg.grad_accum))
@@ -129,9 +146,12 @@ class Trainer:
             elif self._budget_kind == "seconds" and (time.monotonic() - self._budget_started_at) >= self._budget_value:
                 self._budget_reached = True
 
+        samples_seen = 0
+        epoch_start = time.monotonic()
         self.optimizer.zero_grad(set_to_none=True)
         for step_idx, batch in enumerate(dataloader):
             x, mask, y = self._unpack_batch(batch)
+            samples_seen += int(x.shape[0])
             y_hat = self._forward(x, mask)
             if self.task == "regression":
                 y_hat, y = self._prepare_regression_targets(y_hat, y)
@@ -145,14 +165,18 @@ class Trainer:
         # flush leftover grads only if we didn't stop mid-epoch
         if not self._budget_reached and (len(loss_batches) % accum) != 0:
             _flush()
+        self._update_throughput("train", samples_seen, time.monotonic() - epoch_start)
         self.history[stage].append(fmean(loss_batches) if loss_batches else float("nan"))
 
     def _eval_step(self, dataloader, stage):
         loss_batches = []
         metrics_batches = []
+        samples_seen = 0
+        epoch_start = time.monotonic()
         with torch.no_grad():
             for batch in dataloader:
                 x, mask, y = self._unpack_batch(batch)
+                samples_seen += int(x.shape[0])
                 y_hat = self._forward(x, mask)
                 if self.task == "regression":
                     y_hat, y = self._prepare_regression_targets(y_hat, y)
@@ -165,6 +189,9 @@ class Trainer:
                     else:
                         metrics_batches.append(self._classification_metrics(y_hat, y))
 
+        # Track eval throughput on the val pass (test repeats the same compute).
+        if stage == "val":
+            self._update_throughput("eval", samples_seen, time.monotonic() - epoch_start)
         self.history[stage].append(fmean(loss_batches) if loss_batches else float("nan"))
         if stage == "test":
             if self.task == "regression":
@@ -289,6 +316,12 @@ class Trainer:
             )
         if current_lr is not None:
             payload["lr"] = current_lr
+        if self._latest_throughput["train"] is not None:
+            payload["samples_per_s_train"] = self._latest_throughput["train"]
+            payload["samples_per_s_train_ema"] = self._throughput_ema["train"]
+        if self._latest_throughput["eval"] is not None:
+            payload["samples_per_s_eval"] = self._latest_throughput["eval"]
+            payload["samples_per_s_eval_ema"] = self._throughput_ema["eval"]
         return payload
 
     def fit(
