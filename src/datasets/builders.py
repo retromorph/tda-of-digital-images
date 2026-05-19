@@ -207,16 +207,6 @@ def get_image_dataset(cfg: ImageDatasetConfig):
 
 
 def get_persistence_dataset(cfg: PersistenceDatasetConfig):
-    image_cfg = ImageDatasetConfig(
-        dataset_str=cfg.dataset_str,
-        seed=cfg.seed,
-        transform_str=cfg.transform_str,
-        power=cfg.power,
-        fractions=cfg.fractions,
-        output="2d",
-    )
-    dataset_train, dataset_val, dataset_test, meta = get_image_dataset(image_cfg)
-
     filt_params = cfg.filtration_params or {}
     cache_key = stable_hash(cfg.filtration, filt_params)
     train_filename = split_cache_path(cfg.dataset_str, cache_key, "train", cfg.seed)
@@ -230,21 +220,54 @@ def get_persistence_dataset(cfg: PersistenceDatasetConfig):
         power=cfg.power,
     )
 
-    filtration_apply = FILTRATIONS.get(cfg.filtration)(filt_params)
     transform_prefix = f"{cfg.transform_str}-{cfg.power}_" if cfg.transform_str is not None else ""
     suffix = f"seed-{cfg.seed}"
     legacy_train = f"./data/diagrams/{cfg.dataset_str}/{cfg.dataset_str}_train_{suffix}.pkl"
     legacy_val = f"./data/diagrams/{cfg.dataset_str}/{cfg.dataset_str}_val_{suffix}.pkl"
     legacy_test = f"./data/diagrams/{cfg.dataset_str}/{cfg.dataset_str}_test_{transform_prefix}{suffix}.pkl"
 
-    def _get_split(split_name, ds, path, legacy_path):
+    def _load_cached(path, legacy_path):
         payload = load_cache(path)
         if payload is not None:
             return payload
         if cfg.filtration == "pht_directional" and len(filt_params) == 0:
-            legacy = _load_legacy_cache(legacy_path)
-            if legacy is not None:
-                return legacy
+            return _load_legacy_cache(legacy_path)
+        return None
+
+    train_cached = _load_cached(train_filename, legacy_train)
+    val_cached = _load_cached(val_filename, legacy_val)
+    test_cached = _load_cached(test_filename, legacy_test)
+
+    # Fast path: all 3 splits cached → skip the volume load entirely.
+    # Critical for HP search and any sweep that reuses the same filtration cache:
+    # avoids reloading the full image dataset (e.g. DeepOre 17700 × 64³ ≈ 4.5 GB) into
+    # RAM for each child run.
+    if train_cached is not None and val_cached is not None and test_cached is not None:
+        loader = DATASETS.get(cfg.dataset_str)()
+        meta = getattr(loader, "meta", None)
+        if meta is not None:
+            return (
+                PersistenceDataset(train_cached["diagrams"], train_cached["labels"], schema=train_cached.get("schema", {})),
+                PersistenceDataset(val_cached["diagrams"], val_cached["labels"], schema=val_cached.get("schema", {})),
+                PersistenceDataset(test_cached["diagrams"], test_cached["labels"], schema=test_cached.get("schema", {})),
+                meta,
+            )
+
+    image_cfg = ImageDatasetConfig(
+        dataset_str=cfg.dataset_str,
+        seed=cfg.seed,
+        transform_str=cfg.transform_str,
+        power=cfg.power,
+        fractions=cfg.fractions,
+        output="2d",
+    )
+    dataset_train, dataset_val, dataset_test, meta = get_image_dataset(image_cfg)
+
+    filtration_apply = FILTRATIONS.get(cfg.filtration)(filt_params)
+
+    def _get_split(split_name, ds, cached, path):
+        if cached is not None:
+            return cached
         print(f"Computing filtration for {split_name}, this can take several minutes...")
         dgm, schema = _compute_diagrams(ds, filtration_apply)
         labels = ds.targets
@@ -264,9 +287,9 @@ def get_persistence_dataset(cfg: PersistenceDatasetConfig):
         )
         return payload
 
-    train_payload = _get_split("train", dataset_train, train_filename, legacy_train)
-    val_payload = _get_split("val", dataset_val, val_filename, legacy_val)
-    test_payload = _get_split("test", dataset_test, test_filename, legacy_test)
+    train_payload = _get_split("train", dataset_train, train_cached, train_filename)
+    val_payload = _get_split("val", dataset_val, val_cached, val_filename)
+    test_payload = _get_split("test", dataset_test, test_cached, test_filename)
 
     dataset_pht_train = PersistenceDataset(train_payload["diagrams"], train_payload["labels"], schema=train_payload.get("schema", {}))
     dataset_pht_val = PersistenceDataset(val_payload["diagrams"], val_payload["labels"], schema=val_payload.get("schema", {}))
