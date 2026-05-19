@@ -16,4 +16,5 @@ def porous_loader():
         )
         return train_ds, test_ds, meta
 
+    loader.meta = meta
     return loader

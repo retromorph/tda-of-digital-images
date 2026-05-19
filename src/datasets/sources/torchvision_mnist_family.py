@@ -10,6 +10,7 @@ def _build_loader(train_val_fn, test_fn, meta: DatasetMeta):
     def loader(_seed, _fractions):
         return train_val_fn(), test_fn(), meta
 
+    loader.meta = meta
     return loader
 
 

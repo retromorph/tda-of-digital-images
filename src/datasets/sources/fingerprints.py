@@ -15,4 +15,5 @@ def nist_sd04_loader():
             meta,
         )
 
+    loader.meta = meta
     return loader

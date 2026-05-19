@@ -35,4 +35,5 @@ def organamnist_loader():
     def loader(_seed, _fractions):
         return _get_organamnist_train_val(), _get_organamnist_test(), meta
 
+    loader.meta = meta
     return loader
