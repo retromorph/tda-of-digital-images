@@ -67,6 +67,23 @@ class LinearPersformer(nn.Module):
         self.encoder = NystromformerModel(cfg)
         self.num_landmarks = int(num_landmarks)
 
+        # Persistence diagrams are unordered sets: Nyströmformer's learned *absolute*
+        # position embeddings (and token-type embeddings) over an arbitrary point
+        # ordering are meaningless here — the meaningful positional signal (angle) is
+        # already carried in the input features. They also cap sequence length at
+        # `max_position_embeddings` via fixed-size buffers, which crashes on large
+        # diagrams (e.g. the `combined` filtration). Drop them, keep LayerNorm+dropout.
+        emb = self.encoder.embeddings
+
+        def _set_embeddings_forward(
+            input_ids=None, token_type_ids=None, position_ids=None, inputs_embeds=None
+        ):
+            if inputs_embeds is None:
+                inputs_embeds = emb.word_embeddings(input_ids)
+            return emb.dropout(emb.LayerNorm(inputs_embeds))
+
+        emb.forward = _set_embeddings_forward
+
         self.pool_query = nn.Parameter(torch.zeros(1, 1, d_model))
         nn.init.normal_(self.pool_query, std=0.02)
         self.pool_attn = nn.MultiheadAttention(
@@ -118,7 +135,18 @@ class LinearPersformer(nn.Module):
                 m.seq_len = int(current_seq_len)
 
         attention_mask = (~mask).long()
-        out = self.encoder(inputs_embeds=X, attention_mask=attention_mask)
+        # `NystromformerModel.forward` materializes `token_type_ids` from a fixed-size
+        # buffer (`max_position_embeddings`) when none is passed, which crashes on
+        # diagrams longer than that cap. Pass an explicit zero tensor to bypass it
+        # (our embeddings override ignores token-type embeddings anyway).
+        token_type_ids = torch.zeros(
+            X.shape[:2], dtype=torch.long, device=X.device
+        )
+        out = self.encoder(
+            inputs_embeds=X,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+        )
         encoded = out.last_hidden_state[:, :S, :]
         mask = mask[:, :S]
 
