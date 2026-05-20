@@ -101,6 +101,25 @@ class Trainer:
     def _classification_metrics(y_hat, y):
         return {"acc": float(multiclass_accuracy(y_hat, y).detach().cpu().item())}
 
+    def _eval_metrics(self, preds: list, targets: list) -> dict:
+        """Aggregate metrics over the *whole* eval set.
+
+        Concatenating all batches before computing R² is required: R² is not
+        additive across batches, so averaging per-batch values is invalid and
+        degenerates to 0 for small/size-1 eval batches (where within-batch
+        target variance vanishes). RMSE/MAE/acc are computed on the full set
+        too for consistency.
+        """
+        if not preds:
+            if self.task == "regression":
+                return {"rmse": float("nan"), "mae": float("nan"), "r2": float("nan")}
+            return {"acc": float("nan")}
+        y_hat = torch.cat(preds, dim=0)
+        y = torch.cat(targets, dim=0)
+        if self.task == "regression":
+            return self._regression_metrics(y_hat, y)
+        return self._classification_metrics(y_hat, y)
+
     def _regression_metrics(self, y_hat, y):
         y_hat, y = self._prepare_regression_targets(y_hat, y)
         diff = y_hat - y
@@ -177,7 +196,8 @@ class Trainer:
     def _eval_pass(self, dataloader, *, with_metrics: bool) -> dict:
         """Side-effect-free eval pass; returns metrics dict, does NOT touch history."""
         loss_batches: list[float] = []
-        metrics_batches: list[dict] = []
+        preds: list[torch.Tensor] = []
+        targets: list[torch.Tensor] = []
         was_training = self.model.training
         self.model.eval()
         with torch.no_grad():
@@ -189,19 +209,13 @@ class Trainer:
                 loss = self.loss_fn(y_hat, y)
                 loss_batches.append(float(loss.detach().cpu().item()))
                 if with_metrics:
-                    if self.task == "regression":
-                        metrics_batches.append(self._regression_metrics(y_hat, y))
-                    else:
-                        metrics_batches.append(self._classification_metrics(y_hat, y))
+                    preds.append(y_hat.detach())
+                    targets.append(y.detach())
         if was_training:
             self.model.train()
         out: dict = {"loss": fmean(loss_batches) if loss_batches else float("nan")}
         if with_metrics:
-            if self.task == "regression":
-                for k in ("rmse", "mae", "r2"):
-                    out[k] = fmean([m[k] for m in metrics_batches]) if metrics_batches else float("nan")
-            else:
-                out["acc"] = fmean([m["acc"] for m in metrics_batches]) if metrics_batches else float("nan")
+            out.update(self._eval_metrics(preds, targets))
         return out
 
     def _maybe_fire_snapshots(self) -> None:
@@ -235,7 +249,8 @@ class Trainer:
 
     def _eval_step(self, dataloader, stage):
         loss_batches = []
-        metrics_batches = []
+        preds: list[torch.Tensor] = []
+        targets: list[torch.Tensor] = []
         samples_seen = 0
         epoch_start = time.monotonic()
         with torch.no_grad():
@@ -249,21 +264,20 @@ class Trainer:
                 loss_batches.append(float(loss.detach().cpu().item()))
 
                 if stage == "test":
-                    if self.task == "regression":
-                        metrics_batches.append(self._regression_metrics(y_hat, y))
-                    else:
-                        metrics_batches.append(self._classification_metrics(y_hat, y))
+                    preds.append(y_hat.detach())
+                    targets.append(y.detach())
 
         # Track eval throughput on the val pass (test repeats the same compute).
         if stage == "val":
             self._update_throughput("eval", samples_seen, time.monotonic() - epoch_start)
         self.history[stage].append(fmean(loss_batches) if loss_batches else float("nan"))
         if stage == "test":
+            metrics = self._eval_metrics(preds, targets)
             if self.task == "regression":
                 for key in ("rmse", "mae", "r2"):
-                    self.history[key].append(fmean([m[key] for m in metrics_batches]))
+                    self.history[key].append(metrics[key])
             else:
-                self.history["acc"].append(fmean([m["acc"] for m in metrics_batches]))
+                self.history["acc"].append(metrics["acc"])
 
     def _build_optimizer(self, cfg: OptimConfig):
         if cfg.optimizer.lower() != "adamw":

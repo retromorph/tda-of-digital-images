@@ -4,8 +4,11 @@ import gudhi as gd
 
 
 def pht(image, image_base=None, pos=None, eps=None):
-    if len(image.shape) != 3:
-        raise ValueError("Image tensor dimensions should be (channel, width, height).")
+    if image.dim() not in (3, 4):
+        raise ValueError(
+            "Image tensor must be (C, H, W) for 2D or (C, D, H, W) for 3D, "
+            f"got shape {tuple(image.shape)}."
+        )
 
     dim = 6 if pos is not None else 3
     dgm_pht = torch.zeros((0, dim))

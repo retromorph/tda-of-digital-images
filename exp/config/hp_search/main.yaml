@@ -8,7 +8,7 @@ experiment: HpSearch/Main3D
 device: "cuda"  # override to "mps" / "cpu" if needed via env or sub-config
 num_workers: 0
 
-seeds: [42]
+seeds: [0]
 datasets: [DEEPORE-3D]
 
 lr_grid: [0.0001, 0.0003, 0.001]
@@ -20,14 +20,26 @@ budget:
   epochs_hint: 30
 
 common_persistence:
-  filtration_name: edt_sublevel
+  filtration_name: combined
   filtration_args:
-    binarize: otsu
-    pore_phase: dark
-    phase: pore
-    normalize: false
-    ndim: 3
-  idx: [0]
+    filtrations:
+      - name: pht_directional
+        args:
+          ndim: 3
+          n_directions: 16
+          agg: add
+          eps: 0.0
+      - name: edt_sublevel
+        args:
+          ndim: 3
+          binarize: otsu
+          pore_phase: dark
+          phase: pore
+          normalize: true
+          eps: 0.0
+  # pht_directional (k=0): direction_idx in 0..16 (16 directions + n+1 baseline);
+  # edt_sublevel (k=1): direction_idx 0 -> 100 via combined's idx_offset=100.
+  idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 100]
   eps: 0.0
 
 logging:

@@ -1,0 +1,115 @@
+experiment: PreliminaryPorousMain
+
+seeds: [0]
+device: "cuda"
+num_workers: 2
+
+strict_compute: true
+budget:
+  kind: seconds
+  value: 1200
+  epochs_hint: 60
+
+logging:
+  save_best_weights: true
+
+common_persistence:
+  filtration_name: combined
+  filtration_args:
+    filtrations:
+      - name: pht_directional
+        args:
+          agg: add
+      - name: edt_sublevel
+        args:
+          binarize: otsu
+          pore_phase: dark
+          phase: pore
+          normalize: false
+  idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 100]
+  eps: 0.02
+
+tasks:
+  - name: porous2d_clean
+    dataset: POROUS2D-CLEAN
+    transform: null
+    power: 0.0
+    budget:
+      kind: seconds
+      value: 1200
+      epochs_hint: 60
+
+methods:
+  deepsets:
+    args:
+      model: PHTS
+      d_model: 128
+      d_hidden: 192
+      dropout: 0.1
+      activation: GELU
+      alpha: 0.0
+      lr: 0.0001
+      batch_size: 32
+
+  persformer:
+    args:
+      model: PERSFORMER
+      d_model: 64
+      d_hidden: 96
+      num_heads: 4
+      num_layers: 3
+      encoder_dropout: 0.1
+      decoder_dropout: 0.1
+      decoder_hidden_dims: "128,64"
+      pooling_heads: 4
+      norm: layer
+      activation: GELU
+      alpha: 0.0
+      norm_first: true
+      lr: 0.0005
+      weight_decay: 0.0001
+      warmup_epochs: 5
+      eta_min: 0.000001
+      batch_size: 1
+
+  linear_persformer:
+    args:
+      model: LINEAR_PERSFORMER
+      d_model: 64
+      intermediate_size: 96
+      num_hidden_layers: 3
+      num_attention_heads: 4
+      num_landmarks: 32
+      encoder_dropout: 0.1
+      decoder_dropout: 0.1
+      decoder_hidden_dims: "128,64"
+      pooling_heads: 4
+      activation: GELU
+      lr: 0.0005
+      weight_decay: 0.0001
+      warmup_epochs: 5
+      eta_min: 0.000001
+      batch_size: 1
+
+  latent_persformer:
+    args:
+      model: LATENT_PERSFORMER
+      d_model: 64
+      d_latents: 32
+      num_latents: 64
+      num_blocks: 1
+      num_self_attends_per_block: 2
+      num_self_attention_heads: 4
+      num_cross_attention_heads: 4
+      cross_attention_widening_factor: 1
+      self_attention_widening_factor: 1
+      dropout: 0.1
+      decoder_dropout: 0.1
+      decoder_hidden_dims: "128,64"
+      pooling_heads: 4
+      activation: GELU
+      lr: 0.0005
+      weight_decay: 0.0001
+      warmup_epochs: 5
+      eta_min: 0.000001
+      batch_size: 1
